@@ -1,6 +1,7 @@
 """
-GPSE Tools Module
-Collection of utility functions and tools for the GPSE project.
+Enhanced GPSE Tools Module with Multiple News API Support
+Uses Tavily and World News API as primary sources with NewsAPI as fallback
+Fixed version that properly handles tool calls within tools
 """
 
 import os
@@ -14,14 +15,10 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# CrewAI and ChromaDB imports
+# CrewAI imports
 from crewai.tools import tool
-import chromadb
-from sentence_transformers import SentenceTransformer
-from tavily import TavilyClient
+import requests
 from bs4 import BeautifulSoup
-import requests as web_requests
-
 
 # Configure logging
 logging.basicConfig(
@@ -31,499 +28,343 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class GPSETools:
-    """Main tools class for GPSE project utilities."""
+def _internal_news_search(query: str) -> List[Dict[str, Any]]:
+    """
+    Internal news search function that returns raw results.
+    This is used by both the enhanced_news_search tool and the aggregator.
+    """
+    results = []
     
-    def __init__(self):
-        self.project_root = Path(__file__).parent
-        self.strategy_dir = self.project_root / "strategy_analyses"
-        self.db_dir = self.project_root / "strategy_db_chroma"
-        
-    # File Operations
-    def ensure_directory(self, directory: Path) -> None:
-        """Ensure a directory exists, create if it doesn't."""
-        directory = Path(directory)
-        if not directory.exists():
-            directory.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Created directory: {directory}")
-    
-    def read_json_file(self, filepath: Path) -> Dict[str, Any]:
-        """Read and parse a JSON file."""
+    # Try Tavily (Primary Source 1)
+    tavily_key = os.environ.get('TAVILY_API_KEY')
+    if tavily_key:
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except FileNotFoundError:
-            logger.error(f"File not found: {filepath}")
-            return {}
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error in {filepath}: {e}")
-            return {}
-    
-    def write_json_file(self, filepath: Path, data: Dict[str, Any], indent: int = 2) -> bool:
-        """Write data to a JSON file."""
-        try:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=indent, ensure_ascii=False)
-            logger.info(f"Successfully wrote to {filepath}")
-            return True
-        except Exception as e:
-            logger.error(f"Error writing to {filepath}: {e}")
-            return False
-    
-    # Strategy Analysis Tools
-    def list_strategy_files(self) -> List[Path]:
-        """List all strategy analysis files."""
-        if not self.strategy_dir.exists():
-            return []
-        
-        return list(self.strategy_dir.glob("*.md"))
-    
-    def parse_strategy_filename(self, filename: str) -> Dict[str, str]:
-        """
-        Parse strategy filename to extract components.
-        Expected format: STRATEGY-MMDDYY-Description.md
-        """
-        parts = filename.replace('.md', '').split('-')
-        if len(parts) >= 3:
-            return {
-                'strategy': parts[0],
-                'date': parts[1],
-                'description': '-'.join(parts[2:])
+            from tavily import TavilyClient
+            client = TavilyClient(api_key=tavily_key)
+            
+            # Search parameters
+            search_params = {
+                "query": query,
+                "max_results": 8,
+                "search_depth": "advanced",
+                "topic": "news",
+                "days": 2  # Last 48 hours
             }
-        return {'raw': filename}
+            
+            logger.info(f"Searching Tavily for: {query}")
+            tavily_results = client.search(**search_params)
+            
+            if tavily_results and 'results' in tavily_results:
+                for item in tavily_results['results']:
+                    results.append({
+                        'source': 'Tavily',
+                        'title': item.get('title', 'No title'),
+                        'url': item.get('url', ''),
+                        'content': item.get('content', '')[:500],
+                        'published_date': item.get('published_date', ''),
+                        'relevance_score': item.get('score', 0.0)
+                    })
+                logger.info(f"Found {len(results)} results from Tavily")
+        except Exception as e:
+            logger.warning(f"Tavily search failed: {e}")
     
-    # Date and Time Utilities
-    def get_timestamp(self, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
-        """Get current timestamp in specified format."""
-        return datetime.now().strftime(format_str)
-    
-    def get_date_code(self) -> str:
-        """Get date code in MMDDYY format."""
-        return datetime.now().strftime("%m%d%y")
-    
-    # Text Processing
-    def truncate_text(self, text: str, max_length: int = 100, suffix: str = "...") -> str:
-        """Truncate text to specified length."""
-        if len(text) <= max_length:
-            return text
-        return text[:max_length - len(suffix)] + suffix
-    
-    def clean_text(self, text: str) -> str:
-        """Clean text by removing extra whitespace and normalizing line breaks."""
-        # Replace multiple spaces with single space
-        text = ' '.join(text.split())
-        # Normalize line breaks
-        text = text.replace('\r\n', '\n').replace('\r', '\n')
-        # Remove leading/trailing whitespace
-        return text.strip()
-    
-    # Validation Utilities
-    def validate_strategy_code(self, code: str) -> bool:
-        """Validate strategy code format."""
-        # Add validation logic based on your requirements
-        if not code:
-            return False
-        # Example: Check if it's alphanumeric and 4 characters
-        return code.isalnum() and len(code) == 4
-    
-    # Environment Utilities
-    def get_env_variable(self, key: str, default: Optional[str] = None) -> Optional[str]:
-        """Safely get environment variable."""
-        return os.environ.get(key, default)
-    
-    def is_production(self) -> bool:
-        """Check if running in production environment."""
-        env = self.get_env_variable('ENVIRONMENT', 'development')
-        return env.lower() == 'production'
-
-
-# CrewAI Tool Functions
-# These are decorated functions that become tools for agent use
-
-@tool("Strategy Database Query")
-def query_strategy_database(query_text: str) -> str:
-    """
-    Search the strategy database for relevant historical analyses and context.
-    Provide a natural language query to find similar strategic insights,
-    geopolitical analyses, or specific country/region information from past entries.
-    """
-    try:
-        # Initialize persistent ChromaDB client
-        client = chromadb.PersistentClient(path='./strategy_db_chroma')
-        
-        # Get collection
+    # Try World News API (Primary Source 2)
+    world_news_key = os.environ.get('WORLD_NEWS_API_KEY')
+    if world_news_key and world_news_key != 'your_world_news_api_key_here':
         try:
-            collection = client.get_collection(name='grand_strategy')
-        except Exception:
-            return f"Database collection 'grand_strategy' not found. No historical analyses available yet."
-        
-        # Get the sentence transformer model
-        model = SentenceTransformer('all-MiniLM-L6-v2')
-        
-        # Create embedding for the query
-        logger.info(f"Creating embedding for query: {query_text[:50]}...")
-        query_embedding = model.encode(query_text).tolist()
-        
-        # Query the collection
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=3
-        )
-        
-        # Format and return the results
-        if results and 'documents' in results and results['documents']:
-            documents = results['documents'][0]  # Results are nested in a list
+            # Calculate date range
+            to_date = datetime.now().strftime('%Y-%m-%d')
+            from_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
             
-            if not documents:
-                return "No matching historical analyses found for this query."
+            # World News API endpoint
+            url = "https://api.worldnewsapi.com/search-news"
+            params = {
+                'api-key': world_news_key,
+                'text': query,
+                'language': 'en',
+                'earliest-publish-date': from_date,
+                'latest-publish-date': to_date,
+                'sort': 'relevance',
+                'sort-direction': 'desc',
+                'number': 8
+            }
             
-            # Format the results nicely
-            formatted_results = []
-            formatted_results.append(f"Found {len(documents)} relevant historical analyses:\n")
+            logger.info(f"Searching World News API for: {query}")
+            response = requests.get(url, params=params, timeout=10)
             
-            for i, doc in enumerate(documents, 1):
-                # Truncate very long documents for readability
-                preview = doc[:500] + "..." if len(doc) > 500 else doc
-                formatted_results.append(f"\n--- Result {i} ---")
-                formatted_results.append(preview)
+            if response.status_code == 200:
+                data = response.json()
+                if 'news' in data:
+                    for article in data['news']:
+                        results.append({
+                            'source': 'World News API',
+                            'title': article.get('title', 'No title'),
+                            'url': article.get('url', ''),
+                            'content': article.get('text', '')[:500],
+                            'published_date': article.get('publish_date', ''),
+                            'relevance_score': 0.85  # World News API uses different scoring
+                        })
+                    logger.info(f"Added {len(data['news'])} results from World News API")
+        except Exception as e:
+            logger.warning(f"World News API search failed: {e}")
+    
+    # Try NewsAPI.org as additional fallback
+    news_api_key = os.environ.get('NEWS_API_KEY')
+    if news_api_key and news_api_key != 'your_news_api_key_here' and len(results) < 10:
+        try:
+            # Calculate date range
+            to_date = datetime.now()
+            from_date = to_date - timedelta(days=2)
             
-            return "\n".join(formatted_results)
-        else:
-            return "No matching historical analyses found for this query."
+            # NewsAPI endpoint
+            url = "https://newsapi.org/v2/everything"
+            params = {
+                'q': query,
+                'apiKey': news_api_key,
+                'from': from_date.strftime('%Y-%m-%d'),
+                'to': to_date.strftime('%Y-%m-%d'),
+                'sortBy': 'relevancy',
+                'language': 'en',
+                'pageSize': 10 - len(results)  # Only get what we need
+            }
             
-    except Exception as e:
-        logger.error(f"Error querying database: {str(e)}")
-        return f"Error searching the strategy database: {str(e)}"
+            logger.info(f"Searching NewsAPI for: {query}")
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'ok' and data.get('articles'):
+                    for article in data['articles']:
+                        results.append({
+                            'source': 'NewsAPI',
+                            'title': article.get('title', 'No title'),
+                            'url': article.get('url', ''),
+                            'content': article.get('description', '')[:500],
+                            'published_date': article.get('publishedAt', ''),
+                            'relevance_score': 0.8  # NewsAPI doesn't provide scores
+                        })
+                    logger.info(f"Added {len(data['articles'])} results from NewsAPI")
+        except Exception as e:
+            logger.warning(f"NewsAPI search failed: {e}")
+    
+    return results
 
 
-@tool("Strategy Database Update")
-def update_strategy_database(content_and_id: str) -> str:
+@tool("Enhanced News Search")
+def enhanced_news_search(query: str) -> str:
     """
-    Add new strategic analysis content to the database for future reference.
-    Provide the text content and document ID separated by '|||'
-    (e.g., 'content text|||DOC-ID-123').
+    Enhanced news search that uses multiple APIs simultaneously:
+    1. Tavily API (primary source)
+    2. World News API (primary source)
+    3. NewsAPI.org (additional fallback)
+    
+    This ensures comprehensive news coverage from multiple sources.
+    You MUST use this tool to search for news - do not provide hypothetical results.
     """
-    try:
-        # Parse the input to extract content and ID
-        if '|||' not in content_and_id:
-            return "Error: Input must be in format 'content|||document_id'"
-        
-        parts = content_and_id.split('|||', 1)
-        text_content = parts[0].strip()
-        document_id = parts[1].strip() if len(parts) > 1 else ""
-        
-        if not text_content or not document_id:
-            return "Error: Both content and document ID are required"
-        
-        # Initialize persistent ChromaDB client
-        client = chromadb.PersistentClient(path='./strategy_db_chroma')
-        
-        # Get or create collection
-        collection = client.get_or_create_collection(name='grand_strategy')
-        
-        # Get the sentence transformer model
-        model = SentenceTransformer('all-MiniLM-L6-v2')
-        
-        # Create embedding for the text content
-        logger.info(f"Creating embedding for document: {document_id}")
-        embedding = model.encode(text_content).tolist()
-        
-        # Add to collection
-        collection.add(
-            documents=[text_content],
-            embeddings=[embedding],
-            ids=[document_id],
-            metadatas=[{"document_id": document_id}]
-        )
-        
-        logger.info(f"Successfully added document {document_id} to collection grand_strategy")
-        return f"Successfully added document '{document_id}' to the strategy database."
-        
-    except Exception as e:
-        logger.error(f"Error adding text to database: {str(e)}")
-        return f"Error adding document to the strategy database: {str(e)}"
+    results = _internal_news_search(query)
+    
+    # Format and return results
+    if not results:
+        return f"No news articles found for query: {query}. Please ensure API keys are configured correctly in the .env file."
+    
+    # Sort by relevance score and remove duplicates
+    seen_urls = set()
+    unique_results = []
+    for item in sorted(results, key=lambda x: x['relevance_score'], reverse=True):
+        if item['url'] not in seen_urls:
+            seen_urls.add(item['url'])
+            unique_results.append(item)
+    
+    # Format results
+    formatted_results = [f"Found {len(unique_results)} unique news articles for '{query}' from {len(set(r['source'] for r in unique_results))} sources:\n"]
+    
+    for i, item in enumerate(unique_results[:20], 1):  # Limit to 20 results
+        formatted_results.append(f"\n--- Article {i} ---")
+        formatted_results.append(f"Title: {item['title']}")
+        formatted_results.append(f"URL: {item['url']}")
+        formatted_results.append(f"Source: {item['source']}")
+        if item['published_date']:
+            formatted_results.append(f"Published: {item['published_date']}")
+        formatted_results.append(f"Summary: {item['content']}")
+        if item['relevance_score'] > 0:
+            formatted_results.append(f"Relevance: {item['relevance_score']:.2f}")
+    
+    return "\n".join(formatted_results)
 
 
-@tool("Recent News Search")
-def search_recent_news(query: str) -> str:
+@tool("Direct URL News Fetch")
+def fetch_news_from_url(url: str) -> str:
     """
-    Search for recent news articles and current events related to geopolitics.
-    Provide a query to find relevant news stories, political developments,
-    and international affairs from the past few days.
-    """
-    try:
-        # Get API key
-        api_key = os.environ.get('TAVILY_API_KEY')
-        if not api_key:
-            return "Error: TAVILY_API_KEY not found in environment variables"
-        
-        client = TavilyClient(api_key=api_key)
-        
-        # Calculate date range for recent news
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=7)
-        
-        # Prepare search parameters
-        search_params = {
-            "query": query,
-            "max_results": 5,
-            "search_depth": "advanced",
-            "topic": "news",
-            "include_domains": [],
-            "exclude_domains": []
-        }
-        
-        # Add date filtering to query
-        date_query = f"{query} after:{start_date.strftime('%Y-%m-%d')}"
-        search_params["query"] = date_query
-        
-        logger.info(f"Searching for news: {query} (last 7 days)")
-        
-        # Perform the search
-        results = client.search(**search_params)
-        
-        # Format the results
-        if not results or 'results' not in results:
-            return "No news articles found for the given query."
-        
-        news_items = results['results']
-        if not news_items:
-            return "No news articles found for the given query."
-        
-        # Format the results nicely
-        formatted_results = []
-        formatted_results.append(f"Found {len(news_items)} recent news articles:\n")
-        
-        for i, item in enumerate(news_items, 1):
-            formatted_results.append(f"\n--- Article {i} ---")
-            formatted_results.append(f"Title: {item.get('title', 'No title')}")
-            formatted_results.append(f"URL: {item.get('url', 'No URL')}")
-            
-            # Add published date if available
-            if 'published_date' in item:
-                formatted_results.append(f"Published: {item['published_date']}")
-            
-            # Add snippet/content preview
-            content = item.get('content', item.get('snippet', 'No content available'))
-            if content:
-                # Truncate long content
-                preview = content[:300] + "..." if len(content) > 300 else content
-                formatted_results.append(f"Summary: {preview}")
-            
-            # Add relevance score if available
-            if 'score' in item:
-                formatted_results.append(f"Relevance: {item['score']:.2f}")
-        
-        return "\n".join(formatted_results)
-        
-    except Exception as e:
-        logger.error(f"Error searching news with Tavily: {str(e)}")
-        return f"Error searching for news: {str(e)}"
-
-
-@tool("Simple Web Scraper")
-def scrape_web_page(url: str) -> str:
-    """
-    Scrape text content from a web page. Provide a URL to fetch the page
-    and extract the main text content, particularly from paragraph tags
-    and other text elements. Useful for gathering information from web sources.
+    Directly fetch and extract content from a news article URL.
+    Use this when you have specific URLs to analyze in detail.
+    This tool MUST be used to get full article content - do not make up content.
     """
     try:
-        # Validate URL
-        if not url.startswith(('http://', 'https://')):
-            return f"Invalid URL format. URL must start with http:// or https://. Received: {url}"
-        
-        logger.info(f"Fetching web page: {url}")
-        
-        # Set headers
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        # Make the HTTP request
-        response = web_requests.get(url, headers=headers, timeout=10)
+        logger.info(f"Fetching article from: {url}")
+        response = requests.get(url, headers=headers, timeout=10)
         
-        # Check for successful response
         if response.status_code != 200:
-            return f"Failed to fetch page. HTTP status code: {response.status_code}"
+            return f"Failed to fetch article. HTTP status: {response.status_code}"
         
-        # Parse the HTML content
+        # Parse HTML
         soup = BeautifulSoup(response.content, 'html.parser')
         
         # Remove script and style elements
         for script in soup(['script', 'style']):
             script.decompose()
         
-        # Extract text from different elements
-        text_elements = []
+        # Extract article content
+        article_content = []
         
         # Get title
         title = soup.find('title')
         if title:
-            text_elements.append(f"Title: {title.get_text(strip=True)}")
-            text_elements.append("\n" + "="*50 + "\n")
+            article_content.append(f"Title: {title.get_text(strip=True)}")
         
-        # Get main content - try different strategies
+        # Try to find article body
+        article_selectors = [
+            'article',
+            '[class*="article-body"]',
+            '[class*="story-body"]',
+            '[class*="content-body"]',
+            'main'
+        ]
         
-        # Strategy 1: Look for main content containers
-        main_containers = soup.find_all(['main', 'article', 'div'], 
-                                      attrs={'class': ['content', 'main-content', 'article-body', 'entry-content']})
+        article_body = None
+        for selector in article_selectors:
+            article_body = soup.select_one(selector)
+            if article_body:
+                break
         
-        if main_containers:
-            for container in main_containers:
-                paragraphs = container.find_all('p')
-                for p in paragraphs:
-                    text = p.get_text(strip=True)
-                    if text and len(text) > 20:  # Filter out very short paragraphs
-                        text_elements.append(text)
-        else:
-            # Strategy 2: Get all paragraphs if no main container found
-            paragraphs = soup.find_all('p')
+        if article_body:
+            # Get paragraphs
+            paragraphs = article_body.find_all('p')
+            content_text = []
             for p in paragraphs:
                 text = p.get_text(strip=True)
-                if text and len(text) > 20:  # Filter out very short paragraphs
-                    text_elements.append(text)
-        
-        # Also get important headings
-        headings = soup.find_all(['h1', 'h2', 'h3'])
-        for heading in headings:
-            h_text = heading.get_text(strip=True)
-            if h_text:
-                text_elements.append(f"\n### {h_text}\n")
-                # Get the next few paragraphs after each heading
-                next_sibling = heading.find_next_sibling()
-                while next_sibling and next_sibling.name == 'p':
-                    p_text = next_sibling.get_text(strip=True)
-                    if p_text and len(p_text) > 20:
-                        text_elements.append(p_text)
-                    next_sibling = next_sibling.find_next_sibling()
-                    if next_sibling and next_sibling.name in ['h1', 'h2', 'h3']:
-                        break
-        
-        # Get list items if they contain substantial text
-        lists = soup.find_all(['ul', 'ol'])
-        for lst in lists:
-            items = lst.find_all('li')
-            list_text = []
-            for item in items:
-                item_text = item.get_text(strip=True)
-                if item_text and len(item_text) > 10:
-                    list_text.append(f"• {item_text}")
-            if list_text:
-                text_elements.extend(list_text)
-        
-        # Combine all text elements
-        if text_elements:
-            full_text = "\n\n".join(text_elements)
+                if text and len(text) > 30:
+                    content_text.append(text)
             
-            # Clean up excessive newlines
-            full_text = "\n".join(line for line in full_text.split("\n") if line.strip())
-            
-            # Truncate if too long
-            if len(full_text) > 5000:
-                full_text = full_text[:5000] + "\n\n[Content truncated due to length...]"
-            
-            return f"Successfully scraped content from {url}:\n\n{full_text}"
+            if content_text:
+                article_content.append("\nContent:")
+                article_content.extend(content_text[:20])  # Limit paragraphs
+        
+        if len(article_content) > 1:
+            return "\n\n".join(article_content)
         else:
-            return f"No text content found on the page at {url}. The page might be empty, use JavaScript rendering, or have an unusual structure."
+            return f"Could not extract meaningful content from {url}"
             
-    except web_requests.exceptions.Timeout:
-        logger.error(f"Timeout while fetching URL: {url}")
-        return f"Request timed out after 10 seconds while fetching {url}"
-        
-    except web_requests.exceptions.ConnectionError:
-        logger.error(f"Connection error while fetching URL: {url}")
-        return f"Connection error: Unable to reach {url}. Please check if the URL is correct and the server is accessible."
-        
-    except web_requests.exceptions.RequestException as e:
-        logger.error(f"Request error while fetching URL {url}: {str(e)}")
-        return f"Error fetching the web page: {str(e)}"
-        
     except Exception as e:
-        logger.error(f"Unexpected error while scraping {url}: {str(e)}")
-        return f"Unexpected error while scraping the web page: {str(e)}"
+        logger.error(f"Error fetching URL {url}: {e}")
+        return f"Error fetching article: {str(e)}"
 
 
-# Create wrapper classes for consistent interface
-class StrategyDBQueryTool:
-    """Wrapper class for strategy database query tool."""
-    def __init__(self):
-        self.tool = query_strategy_database
+@tool("Geopolitical News Aggregator")
+def aggregate_geopolitical_news(focus_areas: List[str]) -> str:
+    """
+    Aggregate news from multiple sources for specific geopolitical focus areas.
+    Uses both Tavily and World News API as primary sources for comprehensive coverage.
+    Provide a list of focus areas like ['Ukraine conflict', 'China-Taiwan', 'Middle East'].
+    This tool MUST be used to gather comprehensive news - do not provide hypothetical results.
+    """
+    all_results = []
+    
+    # Default focus areas if none provided
+    if not focus_areas:
+        focus_areas = [
+            "Ukraine Russia conflict latest developments",
+            "Middle East tensions Israel Gaza Iran",
+            "China Taiwan relations military",
+            "cyber warfare attacks ransomware",
+            "NATO military developments weapons"
+        ]
+    
+    logger.info(f"Aggregating news for focus areas: {focus_areas}")
+    
+    # Search for each focus area using the internal function
+    for area in focus_areas[:5]:  # Limit to 5 areas
+        logger.info(f"Searching for: {area}")
+        
+        # Use the internal news search function
+        results = _internal_news_search(area)
+        
+        if results:
+            # Format results for this focus area
+            area_results = [f"\n{'='*60}"]
+            area_results.append(f"FOCUS AREA: {area}")
+            area_results.append(f"{'='*60}")
+            
+            # Sort by relevance and format
+            seen_urls = set()
+            unique_results = []
+            for item in sorted(results, key=lambda x: x['relevance_score'], reverse=True):
+                if item['url'] not in seen_urls:
+                    seen_urls.add(item['url'])
+                    unique_results.append(item)
+            
+            area_results.append(f"Found {len(unique_results)} articles from {len(set(r['source'] for r in unique_results))} sources:\n")
+            
+            for i, item in enumerate(unique_results[:10], 1):  # Limit to 10 per area
+                area_results.append(f"\n--- Article {i} ---")
+                area_results.append(f"Title: {item['title']}")
+                area_results.append(f"URL: {item['url']}")
+                area_results.append(f"Source: {item['source']}")
+                if item['published_date']:
+                    area_results.append(f"Published: {item['published_date']}")
+                area_results.append(f"Summary: {item['content']}")
+                if item['relevance_score'] > 0:
+                    area_results.append(f"Relevance: {item['relevance_score']:.2f}")
+            
+            all_results.extend(area_results)
+    
+    if all_results:
+        # Add source summary at the beginning
+        sources_used = []
+        if os.environ.get('TAVILY_API_KEY'):
+            sources_used.append("Tavily")
+        if os.environ.get('WORLD_NEWS_API_KEY') and os.environ.get('WORLD_NEWS_API_KEY') != 'your_world_news_api_key_here':
+            sources_used.append("World News API")
+        if os.environ.get('NEWS_API_KEY') and os.environ.get('NEWS_API_KEY') != 'your_news_api_key_here':
+            sources_used.append("NewsAPI")
+        
+        summary = f"Aggregated geopolitical news for {len(focus_areas)} focus areas\n"
+        summary += f"Active news sources: {', '.join(sources_used)}\n"
+        summary += "\n".join(all_results)
+        return summary
+    else:
+        return "Unable to aggregate news. Please check API configurations."
 
 
-class StrategyDBUpdateTool:
-    """Wrapper class for strategy database update tool."""
-    def __init__(self):
-        self.tool = update_strategy_database
-
-
-class TavilyNewsSearchTool:
-    """Wrapper class for Tavily news search tool."""
-    def __init__(self):
-        self.tool = search_recent_news
-
-
-class SimpleWebScraperTool:
-    """Wrapper class for web scraper tool."""
-    def __init__(self):
-        self.tool = scrape_web_page
-
-
-# Convenience functions
-_tools = None
-
-def get_tools() -> GPSETools:
-    """Get singleton instance of GPSETools."""
-    global _tools
-    if _tools is None:
-        _tools = GPSETools()
-    return _tools
-
-
-# Export commonly used functions at module level
-def ensure_directory(directory: Path) -> None:
-    """Ensure a directory exists."""
-    return get_tools().ensure_directory(directory)
-
-
-def get_timestamp(format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
-    """Get current timestamp."""
-    return get_tools().get_timestamp(format_str)
-
-
-def get_date_code() -> str:
-    """Get date code in MMDDYY format."""
-    return get_tools().get_date_code()
-
-
-def list_strategy_files() -> List[Path]:
-    """List all strategy analysis files."""
-    return get_tools().list_strategy_files()
+# Export tool instances for use in agents
+news_search_tool = enhanced_news_search
+url_fetch_tool = fetch_news_from_url
+news_aggregator_tool = aggregate_geopolitical_news
 
 
 if __name__ == "__main__":
-    # Example usage
-    tools = GPSETools()
+    # Test the enhanced tools
+    print("Testing Enhanced News Tools...")
+    print(f"Configured APIs:")
+    print(f"- Tavily: {'✓' if os.environ.get('TAVILY_API_KEY') else '✗'}")
+    print(f"- World News API: {'✓' if os.environ.get('WORLD_NEWS_API_KEY') and os.environ.get('WORLD_NEWS_API_KEY') != 'your_world_news_api_key_here' else '✗'}")
+    print(f"- NewsAPI: {'✓' if os.environ.get('NEWS_API_KEY') and os.environ.get('NEWS_API_KEY') != 'your_news_api_key_here' else '✗'}")
     
-    print(f"Project root: {tools.project_root}")
-    print(f"Current timestamp: {tools.get_timestamp()}")
-    print(f"Date code: {tools.get_date_code()}")
-    
-    # List strategy files
-    strategies = tools.list_strategy_files()
-    print(f"\nFound {len(strategies)} strategy files:")
-    for strategy in strategies:
-        parsed = tools.parse_strategy_filename(strategy.name)
-        print(f"  - {strategy.name}: {parsed}")
+    # Test search using the raw function
+    print("\nTesting internal search function...")
+    results = _internal_news_search("Ukraine Russia conflict latest")
+    print(f"Found {len(results)} results")
     
     # Test the tools
-    print("\n" + "="*50)
-    print("Testing Database Query Tool:")
-    print("="*50 + "\n")
+    print("\nTesting Enhanced News Search tool...")
+    result_str = enhanced_news_search.run("Ukraine conflict")
+    print(f"Search Result:\n{result_str[:500]}...")
     
-    # Test query
-    result = query_strategy_database("What is China's current AI strategy?")
-    print(result)
-    
-    # Test the other tools only if needed
-    print("\nTools are ready for use with CrewAI agents!")
+    # Test aggregator
+    print("\nTesting Geopolitical News Aggregator tool...")
+    focus_areas = ["Ukraine conflict", "Middle East tensions"]
+    aggregated = aggregate_geopolitical_news.run(focus_areas)
+    print(f"Aggregated Result:\n{aggregated[:500]}...")

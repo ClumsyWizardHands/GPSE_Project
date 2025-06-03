@@ -44,3 +44,10 @@ Thumbs.db
 # ChromaDB
 strategy_db_chroma/
 *.chroma/
+
+# Logs
+logs/
+*.log
+
+# Archive folder (old versions)
+archive/
