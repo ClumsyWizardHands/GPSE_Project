@@ -1,0 +1,136 @@
+news_scout_task:
+  description: >
+    Search for top news articles from the last 24-48 hours focusing on:
+    1. Active warzones and battlefronts (Ukraine, Gaza, Sudan, Myanmar, etc.)
+    2. Strategic atrocities with geopolitical impact
+    3. Major power alignments and support behaviors
+    4. Proxy conflicts and covert escalations
+    5. State-enabled cyber warfare and disinformation campaigns
+    6. Significant diplomatic developments or breakdowns
+    
+    Use multiple search queries to ensure comprehensive coverage.
+    Prioritize authoritative sources and verify information credibility.
+  expected_output: >
+    A structured JSON report containing:
+    - 15-25 high-impact news articles
+    - For each article: URL, title, date, source, summary, relevance_score
+    - Categorization by topic area
+    - Brief assessment of source credibility
+  agent: news_scout
+
+gather_news_task:
+  description: >
+    Take the raw news data from the news scout and:
+    1. Synthesize findings into coherent themes
+    2. Identify patterns across multiple sources
+    3. Highlight contradictions or disputed narratives
+    4. Extract key quotes and data points
+    5. Prepare a structured briefing for strategic analysis
+    
+    Ensure all claims are properly sourced and conflicting reports are noted.
+  expected_output: >
+    A comprehensive intelligence briefing containing:
+    - Executive overview of major developments (500 words)
+    - Detailed findings organized by region/topic
+    - Key actors and their actions
+    - Timeline of significant events
+    - Areas requiring further investigation
+  agent: info_curator
+  context:
+    - news_scout_task
+
+analyze_strategy_task:
+  description: >
+    Conduct deep strategic analysis by:
+    1. Query ChromaDB for relevant historical analyses and patterns
+    2. Compare current events to historical precedents
+    3. Identify strategic shifts in state behavior
+    4. Analyze power dynamics and alignment changes
+    5. Project potential scenarios and their implications
+    6. Consider multiple perspectives (US, China, Russia, EU, regional powers)
+    
+    Focus on inferring strategic intent rather than predicting outcomes.
+  expected_output: >
+    Comprehensive strategic analysis following GPSE format:
+    - Executive Summary (what changed and why it matters)
+    - Primary Observations with actor-specific analysis
+    - Inferred strategic shifts and motivations
+    - Emotion signals, identity factors, and historical resentments
+    - Scenario implications (3-6 months horizon)
+    - Strategic recommendations for monitoring
+  agent: strategy_analyst
+  context:
+    - gather_news_task
+  tools:
+    - query_chromadb
+    - analyze_historical_patterns
+
+geo_analyst_task:
+  description: >
+    Task the geo_analyst agent with producing a comprehensive grand strategy analysis 
+    using the most recent geopolitical news gathered by the news_scout agent as context, 
+    alongside historical strategic data retrieved via ChromaDB. The agent should analyze 
+    the current events in light of historical precedent, inferred strategic doctrine, 
+    and evolving alignment patterns between major state and non-state actors. 
+    
+    The analysis should emphasize:
+    1. Key shifts in power configurations
+    2. Emerging flashpoints and asymmetric threats
+    3. Latent strategic opportunities
+    4. Subtle relational signals indicating larger moves underway
+    5. Covert alignments and hidden strategic partnerships
+    6. Long-horizon consequences of current developments
+    7. Intertemporal patterns connecting past behaviors to future trajectories
+    
+    Apply classical military theory frameworks while incorporating modern asymmetric 
+    warfare concepts. Never oversimplify the strategic gameboard.
+  expected_output: >
+    A detailed, well-structured textual analysis that synthesizes both present 
+    developments and historical trajectories to map the current geopolitical 
+    landscape and its deeper strategic implications. The output must include:
+    
+    - [Actors]: Comprehensive list of all relevant state and non-state actors
+    - [Inferred Ends]: Strategic objectives each actor appears to be pursuing
+    - [Means]: Capabilities, methods, and resources being deployed
+    - [Alignment Signals]: Indicators of cooperation, opposition, or neutrality
+    - [Flashpoints]: Specific locations or issues with high escalation potential
+    - [Scenario Potential]: Assessment of likely evolution paths
+    
+    The analysis should be verbose and comprehensive, prioritizing layered 
+    inference over surface-level summary. Each conclusion must be supported 
+    by both current evidence and historical patterns.
+  agent: geo_analyst
+  context:
+    - gather_news_task
+    - analyze_strategy_task
+  tools:
+    - strategy_db_query
+    - query_chromadb
+    - analyze_historical_patterns
+
+document_archive_task:
+  description: >
+    Format the strategic analysis and update the knowledge base:
+    1. Create properly formatted markdown document following GPSE standards
+    2. Generate appropriate filename (GGSM-MMDDYY-Description.md)
+    3. Save to strategy_analyses directory
+    4. Process document for ChromaDB storage
+    5. Update database with new embeddings
+    6. Verify successful archival
+    
+    Ensure consistency with established document structure and naming conventions.
+  expected_output: >
+    Confirmation report containing:
+    - Saved document path and filename
+    - Number of chunks added to ChromaDB
+    - Summary of topics covered
+    - Cross-references to related historical analyses
+  agent: comms_archival
+  context:
+    - analyze_strategy_task
+    - geo_analyst_task
+  output_file: strategy_analyses/GGSM-{date_code}-DailyAnalysis.md
+  tools:
+    - save_strategy_document
+    - add_to_chromadb
+    - validate_document_format
