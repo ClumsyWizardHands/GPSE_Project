@@ -1,0 +1,96 @@
+news_scout_task:
+  description: >
+    Search for top news articles from the last 24-48 hours focusing on:
+    1. Active warzones and battlefronts (Ukraine, Gaza, Sudan, Myanmar, etc.)
+    2. Strategic atrocities with geopolitical impact
+    3. Major power alignments and support behaviors
+    4. Proxy conflicts and covert escalations
+    5. State-enabled cyber warfare and disinformation campaigns
+    6. Significant diplomatic developments or breakdowns
+    
+    Use multiple search queries to ensure comprehensive coverage.
+    Prioritize authoritative sources and verify information credibility.
+  expected_output: >
+    A structured JSON report containing:
+    - 15-25 high-impact news articles
+    - For each article: URL, title, date, source, summary, relevance_score
+    - Categorization by topic area
+    - Brief assessment of source credibility
+  agent: news_scout
+
+geo_analyst_task:
+  description: >
+    Task the geo_analyst agent with producing a comprehensive grand strategy analysis 
+    using the most recent geopolitical news gathered by the news_scout agent as context, 
+    alongside historical strategic data retrieved via ChromaDB. The agent should analyze 
+    the current events in light of historical precedent, inferred strategic doctrine, 
+    and evolving alignment patterns between major state and non-state actors. 
+    
+    The analysis should emphasize:
+    1. Key shifts in power configurations
+    2. Emerging flashpoints and asymmetric threats
+    3. Latent strategic opportunities
+    4. Subtle relational signals indicating larger moves underway
+    5. Covert alignments and hidden strategic partnerships
+    6. Long-horizon consequences of current developments
+    7. Intertemporal patterns connecting past behaviors to future trajectories
+    
+    Apply classical military theory frameworks while incorporating modern asymmetric 
+    warfare concepts. Never oversimplify the strategic gameboard.
+  expected_output: >
+    A detailed, well-structured textual analysis that synthesizes both present 
+    developments and historical trajectories to map the current geopolitical 
+    landscape and its deeper strategic implications. The output must include:
+    
+    - [Actors]: Comprehensive list of all relevant state and non-state actors
+    - [Inferred Ends]: Strategic objectives each actor appears to be pursuing
+    - [Means]: Capabilities, methods, and resources being deployed
+    - [Alignment Signals]: Indicators of cooperation, opposition, or neutrality
+    - [Flashpoints]: Specific locations or issues with high escalation potential
+    - [Scenario Potential]: Assessment of likely evolution paths
+    
+    The analysis should be verbose and comprehensive, prioritizing layered 
+    inference over surface-level summary. Each conclusion must be supported 
+    by both current evidence and historical patterns.
+  agent: geo_analyst
+  context:
+    - news_scout_task
+
+communicator_task:
+  description: >
+    Take the grand strategy analysis from previous agents and complete the following:
+    1. Format it clearly into the standard GPSE document structure with all sections
+    2. Save it to a Markdown file named strategy_analysis_[CURRENT_DATE].md 
+       where [CURRENT_DATE] is today's date dynamically generated using datetime
+       in MMDDYY format (e.g., 060325 for June 3, 2025)
+    3. Add this new analysis to our historical strategy database using its content 
+       and a unique ID based on the current date/time (e.g., GPSE_YYYY-MM-DD_NNN)
+    4. Ensure all strategic metadata tags are preserved:
+       - [Actors]: All relevant state and non-state actors
+       - [Inferred Ends]: Strategic objectives being pursued
+       - [Means]: Capabilities and methods deployed
+       - [Alignment Signals]: Cooperation/opposition indicators
+       - [Flashpoints]: High escalation potential areas
+       - [Scenario Potential]: Evolution path assessments
+    5. Use datetime.now() to dynamically generate the current date for both filename 
+       and document_id - DO NOT hardcode any specific date
+    6. Provide comprehensive archival summary
+    
+    The document must follow GPSE format with proper headers, executive summary,
+    primary observations with actor analysis, and scenario implications.
+  expected_output: >
+    Confirmation that the analysis was saved to the file and archived in the 
+    strategy database, including:
+    - Full file path with dynamically generated date 
+      (e.g., strategy_analyses/strategy_analysis_MMDDYY.md)
+    - Document ID used for ChromaDB archival with current timestamp
+      (e.g., GPSE_YYYY-MM-DD_NNN)
+    - Number of chunks successfully added to ChromaDB
+    - Summary of key topics and primary actors covered in the analysis
+    - Verification that all strategic metadata tags were preserved
+    - Collection statistics (total documents in database)
+    - Any issues encountered and how they were resolved
+    - Recommendations for follow-up analyses based on identified gaps
+  agent: communicator
+  context:
+    - geo_analyst_task

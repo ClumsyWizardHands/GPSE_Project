@@ -1,96 +1,254 @@
 news_scout_task:
   description: >
-    Search for top news articles from the last 24-48 hours focusing on:
-    1. Active warzones and battlefronts (Ukraine, Gaza, Sudan, Myanmar, etc.)
-    2. Strategic atrocities with geopolitical impact
-    3. Major power alignments and support behaviors
-    4. Proxy conflicts and covert escalations
-    5. State-enabled cyber warfare and disinformation campaigns
-    6. Significant diplomatic developments or breakdowns
+    Execute comprehensive news intelligence gathering with mandatory verification protocols:
     
-    Use multiple search queries to ensure comprehensive coverage.
-    Prioritize authoritative sources and verify information credibility.
+    SEARCH REQUIREMENTS:
+    1. Query multiple sources for each topic area (minimum 3 different outlets per topic)
+    2. Focus on events from the last 24-48 hours with EXACT UTC timestamps
+    3. Prioritize primary sources and official statements
+    4. Cross-reference breaking news with established outlets
+    
+    VERIFICATION WORKFLOW:
+    1. Source Assessment:
+       - Domain Authority verification (Reuters, AP, BBC, etc. preferred)
+       - Bias classification using AllSides/MBFC standards
+       - Ownership structure identification
+       - Geographic perspective analysis
+    
+    2. Article Evaluation:
+       - Primary source verification (direct quotes, documents, video)
+       - Credibility scoring (0-10 scale with justification)
+       - Contradiction identification across sources
+       - Information warfare detection
+    
+    3. Quality Gates:
+       - Source Reputation ≥ 6/10
+       - Article Quality ≥ 5/10
+       - Relevance Score ≥ 7/10
+       - Exclude articles failing thresholds with explanation
+    
+    TARGET AREAS:
+    - Active conflicts: Ukraine, Gaza, Sudan, Myanmar (verified casualty data required)
+    - Strategic incidents: Atrocities, assassinations, coups (independent confirmation)
+    - Power dynamics: Alliance shifts, military deployments (official sources)
+    - Proxy operations: Irregular warfare, militias (evidence trails)
+    - Cyber/Information: State operations, disinformation (technical verification)
+    - Diplomatic: Treaties, sanctions, summits (primary documentation)
+    
+    CONTRADICTION PROTOCOL:
+    When sources conflict, document both versions with credibility analysis and potential
+    information warfare assessment. Never suppress conflicting accounts.
   expected_output: >
-    A structured JSON report containing:
-    - 15-25 high-impact news articles
-    - For each article: URL, title, date, source, summary, relevance_score
-    - Categorization by topic area
-    - Brief assessment of source credibility
+    A comprehensive intelligence brief in structured JSON containing:
+    
+    {
+      "collection_metadata": {
+        "start_time_utc": "ISO timestamp",
+        "end_time_utc": "ISO timestamp", 
+        "total_sources_queried": number,
+        "total_articles_evaluated": number,
+        "total_articles_selected": number
+      },
+      "articles": [
+        {
+          "article_id": "unique identifier",
+          "headline": "exact headline",
+          "url": "full URL",
+          "source": {
+            "name": "outlet name",
+            "bias_rating": "Left/Lean Left/Center/Lean Right/Right",
+            "factual_rating": "Very High/High/Mixed/Low",
+            "ownership": "State/Corporate/Independent",
+            "geographic_perspective": "Western/Eastern/Regional"
+          },
+          "timestamps": {
+            "event_occurred": "UTC timestamp of actual event",
+            "first_reported": "UTC timestamp of initial report",
+            "verified_at": "UTC timestamp of confirmation",
+            "last_updated": "UTC timestamp of latest update"
+          },
+          "credibility_scores": {
+            "source_reputation": 0-10,
+            "article_quality": 0-10,
+            "verification_status": 0-10,
+            "relevance_score": 0-10,
+            "composite_score": 0-10,
+            "score_justification": "explanation"
+          },
+          "content": {
+            "summary": "2-3 sentence summary",
+            "key_facts": ["fact1", "fact2", "fact3"],
+            "primary_sources": ["source1", "source2"],
+            "contradictions": "any conflicting reports"
+          },
+          "strategic_relevance": "why this matters geopolitically",
+          "topic_categories": ["category1", "category2"]
+        }
+      ],
+      "excluded_articles": [
+        {
+          "headline": "article title",
+          "source": "outlet",
+          "exclusion_reason": "failed quality gate X with score Y"
+        }
+      ],
+      "source_diversity_analysis": {
+        "geographic_distribution": {},
+        "bias_distribution": {},
+        "total_unique_sources": number
+      }
+    }
   agent: news_scout
 
 geo_analyst_task:
   description: >
-    Task the geo_analyst agent with producing a comprehensive grand strategy analysis 
-    using the most recent geopolitical news gathered by the news_scout agent as context, 
-    alongside historical strategic data retrieved via ChromaDB. The agent should analyze 
-    the current events in light of historical precedent, inferred strategic doctrine, 
-    and evolving alignment patterns between major state and non-state actors. 
+    IMMEDIATE ACTION REQUIRED: Begin your analysis with the most significant specific event from news_scout's report.
+    
+    DO NOT start with historical overview or context-setting.
+    DO NOT begin with "To understand X, we must first..."
+    DO start with "At [time] on [date], [specific actor] [specific action]..."
+    
+    Your workflow MUST be:
+    1. Identify the 3-5 most strategically significant events from news_scout
+    2. For EACH event, analyze:
+       - What specific capabilities/intentions it reveals
+       - Which actors are involved and their immediate objectives
+       - Observable evidence (deployments, statements, economic actions)
+    3. ONLY THEN query ChromaDB for historical patterns related to these SPECIFIC events/actors
+    4. Compare current events to historical patterns to identify:
+       - Continuities (this follows established pattern X)
+       - Deviations (this breaks from pattern Y)
+       - Novel developments (no historical precedent)
+    5. Build strategic inferences from these specific comparisons
     
     The analysis should emphasize:
-    1. Key shifts in power configurations
-    2. Emerging flashpoints and asymmetric threats
-    3. Latent strategic opportunities
-    4. Subtle relational signals indicating larger moves underway
-    5. Covert alignments and hidden strategic partnerships
-    6. Long-horizon consequences of current developments
-    7. Intertemporal patterns connecting past behaviors to future trajectories
+    1. SPECIFIC timestamped events with exact sources
+    2. Actor-specific doctrinal analysis (NOT symmetric comparisons)
+    3. Evidence-based inference chains (observable → inference → implication)
+    4. Temporal gap acknowledgment (training cutoff to present)
+    5. Contradiction reconciliation when sources conflict
+    6. Creative pattern recognition (what's NOT being said/done)
+    7. Multi-move scenario modeling with probabilities
     
-    Apply classical military theory frameworks while incorporating modern asymmetric 
-    warfare concepts. Never oversimplify the strategic gameboard.
+    Apply asymmetric frameworks - China's century planning vs US electoral cycles,
+    Russian maskirovka vs EU consensus building. Never collapse into generic analysis.
   expected_output: >
-    A detailed, well-structured textual analysis that synthesizes both present 
-    developments and historical trajectories to map the current geopolitical 
-    landscape and its deeper strategic implications. The output must include:
+    A rigorously structured analysis that begins with TODAY'S specific events and builds
+    strategic understanding from evidence up. Required sections:
     
-    - [Actors]: Comprehensive list of all relevant state and non-state actors
-    - [Inferred Ends]: Strategic objectives each actor appears to be pursuing
-    - [Means]: Capabilities, methods, and resources being deployed
-    - [Alignment Signals]: Indicators of cooperation, opposition, or neutrality
-    - [Flashpoints]: Specific locations or issues with high escalation potential
-    - [Scenario Potential]: Assessment of likely evolution paths
+    - [Knowledge Baseline]: "Training data to [date], bridging gap to [current date] using..."
+    - [Current Intelligence]: Specific findings from news_scout with timestamps
+    - [Historical Context]: Relevant patterns/assessments from ChromaDB
+    - [Evidence Base]: Specific events/statements with timestamps and sources
+    - [Actor Doctrines]: How each actor's unique strategic culture shapes their moves
+    - [Strategic Inferences]: Creative but evidence-based reading between the lines
+    - [Hidden Indicators]: What's not being said/done that reveals intentions
+    - [Future Trajectories]: Multiple scenarios with probability assessments and key indicators
+    - [Contradiction Reconciliation]: How you handle conflicting intelligence
+    - [Learning Delta]: What changed from past GPSE assessments and why
+    - [Cascade Modeling]: Multi-move scenarios with probability assessments
+    - [Intelligence Gaps]: Critical missing information between training cutoff and present
     
-    The analysis should be verbose and comprehensive, prioritizing layered 
-    inference over surface-level summary. Each conclusion must be supported 
-    by both current evidence and historical patterns.
+    Every inference must cite specific evidence. Every actor must be analyzed through
+    their unique doctrinal lens. Every prediction must include indicators to watch.
   agent: geo_analyst
   context:
     - news_scout_task
 
 communicator_task:
   description: >
-    Take the grand strategy analysis from previous agents and complete the following:
-    1. Format it clearly into the standard GPSE document structure with all sections
-    2. Save it to a Markdown file named strategy_analysis_[CURRENT_DATE].md 
-       where [CURRENT_DATE] is today's date dynamically generated using datetime
-       in MMDDYY format (e.g., 060325 for June 3, 2025)
-    3. Add this new analysis to our historical strategy database using its content 
-       and a unique ID based on the current date/time (e.g., GPSE_YYYY-MM-DD_NNN)
-    4. Ensure all strategic metadata tags are preserved:
-       - [Actors]: All relevant state and non-state actors
-       - [Inferred Ends]: Strategic objectives being pursued
-       - [Means]: Capabilities and methods deployed
-       - [Alignment Signals]: Cooperation/opposition indicators
-       - [Flashpoints]: High escalation potential areas
-       - [Scenario Potential]: Evolution path assessments
-    5. Use datetime.now() to dynamically generate the current date for both filename 
-       and document_id - DO NOT hardcode any specific date
-    6. Provide comprehensive archival summary
+    Transform the strategic analysis into a pristine intelligence document with rigorous quality control:
     
-    The document must follow GPSE format with proper headers, executive summary,
-    primary observations with actor analysis, and scenario implications.
+    QUALITY CONTROL CHECKLIST (mandatory before saving):
+    □ Metadata Verification:
+      - All required tags present ([Actors], [Inferred Ends], [Means], etc.)
+      - Each tag contains substantive, specific content (no placeholders)
+      - Tags accurately reflect the analysis content
+    
+    □ Section Validation:
+      - Executive Summary captures key insights concisely
+      - All geo_analyst sections properly incorporated
+      - Learning comparisons to past assessments included
+      - Scenario implications with probabilities present
+    
+    □ Temporal Accuracy:
+      - All timestamps converted to UTC format
+      - Event sequences chronologically accurate
+      - Date format consistency throughout
+    
+    □ Source Attribution:
+      - Every claim traces to a specific source
+      - Contradiction reconciliations preserved
+      - News_scout credibility scores referenced
+    
+    □ Format Standardization:
+      - GGSM-MMDDYY-DailyAnalysis naming convention
+      - Proper Markdown hierarchy (#, ##, ###)
+      - Consistent spacing and structure
+      - No formatting errors or inconsistencies
+    
+    CROSS-REFERENCE REQUIREMENTS:
+    1. Query ChromaDB for related past assessments
+    2. Identify prediction accuracy from previous analyses
+    3. Note pattern evolutions and strategic shifts
+    4. Include "Learning from History" section
+    
+    ERROR CORRECTION PROTOCOL:
+    - Generic language → Replace with specific evidence
+    - Missing timestamps → Add from news_scout data
+    - Vague attributions → Specify exact sources
+    - Symmetric comparisons → Apply actor-specific analysis
+    - Unverified claims → Flag or remove
+    
+    ARCHIVAL EXCELLENCE:
+    1. Chunk document intelligently at section boundaries
+    2. Tag each chunk with relevant metadata
+    3. Create relationship links between related analyses
+    4. Generate unique document ID: GPSE_YYYY-MM-DD_NNN
+    
+    DO NOT save until ALL quality gates pass. Fix any issues before proceeding.
   expected_output: >
-    Confirmation that the analysis was saved to the file and archived in the 
-    strategy database, including:
-    - Full file path with dynamically generated date 
-      (e.g., strategy_analyses/strategy_analysis_MMDDYY.md)
-    - Document ID used for ChromaDB archival with current timestamp
-      (e.g., GPSE_YYYY-MM-DD_NNN)
-    - Number of chunks successfully added to ChromaDB
-    - Summary of key topics and primary actors covered in the analysis
-    - Verification that all strategic metadata tags were preserved
-    - Collection statistics (total documents in database)
-    - Any issues encountered and how they were resolved
-    - Recommendations for follow-up analyses based on identified gaps
+    Quality assurance report confirming pristine document creation:
+    
+    DOCUMENT DETAILS:
+    - File Path: strategy_analyses/GGSM-MMDDYY-DailyAnalysis.md
+    - Document ID: GPSE_YYYY-MM-DD_NNN
+    - Creation Time: [UTC timestamp]
+    - Word Count: [total words]
+    
+    QUALITY VALIDATION:
+    ✓ Metadata Completeness: [List all verified tags]
+    ✓ Section Compliance: [List all included sections]
+    ✓ Temporal Accuracy: [Number of timestamps verified]
+    ✓ Source Attribution: [Number of citations included]
+    ✓ Format Consistency: [Confirmation of standards met]
+    
+    CHROMADB ARCHIVAL:
+    - Chunks Created: [number] chunks
+    - Metadata Tags Applied: [list of tags]
+    - Cross-References: [number] links to past analyses
+    - Collection Stats: [total documents in database]
+    
+    LEARNING INTEGRATION:
+    - Past Assessments Referenced: [list with IDs]
+    - Prediction Validations: [accuracy notes]
+    - Pattern Evolution: [key changes identified]
+    - Emerging Themes: [new patterns detected]
+    
+    ISSUES RESOLVED:
+    - [List any corrections made during QA]
+    - [Note any content enhancements]
+    - [Document any clarifications added]
+    
+    RECOMMENDATIONS:
+    - Follow-up Analysis Topics: [based on gaps identified]
+    - Collection Priorities: [areas needing more coverage]
+    - Pattern Monitoring: [trends to track]
+    
+    FINAL CONFIRMATION:
+    "Document meets all GPSE intelligence standards and has been successfully 
+    archived in the strategic knowledge base with full metadata preservation 
+    and cross-referencing."
   agent: communicator
   context:
     - geo_analyst_task
