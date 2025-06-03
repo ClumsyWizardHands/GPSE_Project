@@ -105,7 +105,26 @@ strategy_analyses/
 
 ## 🏗️ System Architecture
 
-![System Architecture](docs/diagrams/system_architecture.png)
+### 🎨 Visual Documentation
+
+Explore GPSE through our comprehensive Mermaid diagrams:
+
+#### Core Architecture
+- 🏛️ [System Architecture](docs/diagrams/system_architecture.mermaid) - Multi-agent system overview
+- 🔄 [Data Flow](docs/diagrams/data_flow.mermaid) - How data moves through the pipeline
+- 🛠️ [Agent-Tool Mapping](docs/diagrams/agent_tools_mapping.mermaid) - Which agents use which tools
+
+#### Process & Execution
+- 📅 [Daily Execution Flow](docs/diagrams/daily_execution_flow.mermaid) - Step-by-step sequence diagram
+- 🔄 [Agent State Diagram](docs/diagrams/agent_state_diagram.mermaid) - Agent lifecycle and states
+- 🗺️ [User Journey](docs/diagrams/user_journey.mermaid) - From setup to daily intelligence
+
+#### Technical Details
+- 💻 [Technology Stack](docs/diagrams/technology_stack.mermaid) - Complete tech stack visualization
+- 🧠 [Strategic Analysis Framework](docs/diagrams/strategic_analysis_framework.mermaid) - Analysis methodology
+- 📋 [Output Structure](docs/diagrams/output_structure.mermaid) - Intelligence brief components
+
+### Key Components
 
 GPSE uses three specialized AI agents:
 
@@ -147,6 +166,10 @@ GPSE_Project/
 ├── strategy_analyses/       # Output directory
 ├── memory-bank/            # Project documentation
 └── docs/                   # Additional documentation
+    ├── diagrams/           # Visual architecture diagrams
+    ├── SETUP_GUIDE.md
+    ├── SAMPLE_OUTPUT.md
+    └── ARCHITECTURE.md
 ```
 
 ## 🤝 Contributing

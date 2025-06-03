@@ -1,0 +1,53 @@
+stateDiagram-v2
+    [*] --> Idle: System Start
+    
+    state "News Scout Agent" as NS {
+        [*] --> Searching
+        Searching --> Aggregating: News Found
+        Aggregating --> Filtering: Remove Duplicates
+        Filtering --> Summarizing: Apply Relevance
+        Summarizing --> [*]: Task Complete
+    }
+    
+    state "Strategic Analyst Agent" as SA {
+        [*] --> ReceivingInput
+        ReceivingInput --> QueryingHistory: News Received
+        QueryingHistory --> AnalyzingContext: History Retrieved
+        AnalyzingContext --> ApplyingFrameworks: Context Loaded
+        ApplyingFrameworks --> GeneratingScenarios: Frameworks Applied
+        GeneratingScenarios --> AssessingRisks: Scenarios Created
+        AssessingRisks --> [*]: Analysis Complete
+    }
+    
+    state "Communicator Agent" as CA {
+        [*] --> ReceivingAnalysis
+        ReceivingAnalysis --> StructuringDocument: Analysis Received
+        StructuringDocument --> FormattingMarkdown: Structure Ready
+        FormattingMarkdown --> QualityCheck: Markdown Formatted
+        QualityCheck --> Saving: Quality Approved
+        QualityCheck --> FormattingMarkdown: Issues Found
+        Saving --> Archiving: File Saved
+        Archiving --> [*]: Task Complete
+    }
+    
+    Idle --> NS: Start Daily Analysis
+    NS --> SA: News Summary Ready
+    SA --> CA: Strategic Analysis Ready
+    CA --> Complete: Brief Generated
+    Complete --> Idle: Ready for Next Run
+    
+    note right of NS
+        Gathers news from
+        multiple sources
+    end note
+    
+    note right of SA
+        Applies strategic
+        frameworks with
+        historical context
+    end note
+    
+    note right of CA
+        Creates professional
+        intelligence brief
+    end note

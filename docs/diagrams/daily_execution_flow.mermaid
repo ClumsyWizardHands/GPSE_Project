@@ -1,0 +1,49 @@
+sequenceDiagram
+    participant User
+    participant Main as main_crew.py
+    participant NS as News Scout
+    participant SA as Strategic Analyst
+    participant CA as Communicator
+    participant API as News APIs
+    participant DB as ChromaDB
+    participant FS as File System
+
+    User->>Main: python main_crew.py
+    Main->>Main: Initialize ChromaDB with Windows fixes
+    Main->>Main: Load environment variables
+    
+    rect rgb(230, 240, 250)
+        note right of Main: News Gathering Phase
+        Main->>NS: Start news collection task
+        NS->>API: Query Tavily API
+        API-->>NS: Return news results
+        NS->>API: Query World News API
+        API-->>NS: Return additional results
+        NS->>NS: Aggregate & deduplicate
+        NS->>NS: Filter for strategic relevance
+        NS-->>Main: News summary complete
+    end
+    
+    rect rgb(240, 250, 230)
+        note right of Main: Analysis Phase
+        Main->>SA: Analyze news with context
+        SA->>DB: Query historical analyses
+        DB-->>SA: Return relevant context
+        SA->>SA: Apply strategic frameworks
+        SA->>SA: Generate scenarios
+        SA->>SA: Assess risks & opportunities
+        SA-->>Main: Strategic analysis complete
+    end
+    
+    rect rgb(250, 240, 230)
+        note right of Main: Output Phase
+        Main->>CA: Create intelligence brief
+        CA->>CA: Structure document
+        CA->>CA: Format markdown
+        CA->>CA: Quality control
+        CA->>FS: Save to strategy_analyses/
+        CA->>DB: Archive to ChromaDB
+        CA-->>Main: Brief complete
+    end
+    
+    Main-->>User: Analysis saved to<br/>GGSM-[Date]-DailyAnalysis.md

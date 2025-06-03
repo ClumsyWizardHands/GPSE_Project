@@ -1,0 +1,91 @@
+graph TB
+    subgraph "Frontend Layer"
+        U[👤 User]
+        CLI[Command Line Interface]
+        OUT[📄 Markdown Output]
+    end
+    
+    subgraph "Application Layer"
+        MC[main_crew.py]
+        
+        subgraph "CrewAI Framework"
+            A1[🔍 News Scout Agent]
+            A2[🧠 Strategic Analyst Agent]
+            A3[📝 Communicator Agent]
+        end
+        
+        subgraph "Tools Module"
+            GT[gpse_tools_comprehensive.py]
+            T1[enhanced_news_search]
+            T2[aggregate_geopolitical_news]
+            T3[fetch_news_from_url]
+            T4[query_strategy_database]
+        end
+    end
+    
+    subgraph "Data Layer"
+        subgraph "External APIs"
+            TAV[Tavily API]
+            WNA[World News API]
+            OAI[OpenAI GPT-4o]
+        end
+        
+        subgraph "Storage"
+            CDB[(ChromaDB<br/>Vector Database)]
+            FS[File System<br/>strategy_analyses/]
+        end
+    end
+    
+    subgraph "Infrastructure"
+        ENV[.env Configuration]
+        VENV[Python Virtual Environment]
+        WIN[Windows Fixes<br/>- Short paths<br/>- SQLite patches<br/>- Temp directory]
+    end
+    
+    %% Connections
+    U --> CLI
+    CLI --> MC
+    MC --> A1
+    MC --> A2
+    MC --> A3
+    
+    A1 --> T1
+    A1 --> T2
+    A1 --> T3
+    A2 --> T4
+    
+    GT --> T1
+    GT --> T2
+    GT --> T3
+    GT --> T4
+    
+    T1 --> TAV
+    T1 --> WNA
+    T4 --> CDB
+    
+    A1 --> OAI
+    A2 --> OAI
+    A3 --> OAI
+    
+    A3 --> FS
+    A3 --> CDB
+    
+    MC --> OUT
+    OUT --> U
+    
+    ENV --> MC
+    VENV --> MC
+    WIN --> CDB
+    
+    %% Styling
+    classDef user fill:#e3f2fd,stroke:#1565c0,stroke-width:3px
+    classDef agent fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef tool fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+    classDef storage fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef external fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    
+    class U,CLI,OUT user
+    class A1,A2,A3 agent
+    class T1,T2,T3,T4,GT tool
+    class CDB,FS storage
+    class TAV,WNA,OAI external
