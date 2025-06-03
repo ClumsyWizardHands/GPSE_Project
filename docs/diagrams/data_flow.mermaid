@@ -1,0 +1,73 @@
+flowchart LR
+    %% Data Flow Diagram for GPSE
+
+    subgraph "External Data Sources"
+        TAV[Tavily API]
+        WNA[World News API]
+        SERP[Serper API<br/>Optional]
+    end
+
+    subgraph "News Scout Agent"
+        direction TB
+        NS1[Search News<br/>Multiple Queries]
+        NS2[Aggregate Results<br/>Remove Duplicates]
+        NS3[Filter Strategic<br/>Relevance]
+        NS4[Extract URLs &<br/>Summaries]
+        
+        NS1 --> NS2
+        NS2 --> NS3
+        NS3 --> NS4
+    end
+
+    subgraph "Strategic Analyst Agent"
+        direction TB
+        SA1[Receive News<br/>Summary]
+        SA2[Query Historical<br/>Context]
+        SA3[Apply Strategic<br/>Frameworks]
+        SA4[Generate<br/>Scenarios]
+        SA5[Risk Assessment]
+        
+        SA1 --> SA2
+        SA2 --> SA3
+        SA3 --> SA4
+        SA4 --> SA5
+    end
+
+    subgraph "Communicator Agent"
+        direction TB
+        CA1[Structure<br/>Analysis]
+        CA2[Format<br/>Document]
+        CA3[Quality<br/>Control]
+        CA4[Save & Archive]
+        
+        CA1 --> CA2
+        CA2 --> CA3
+        CA3 --> CA4
+    end
+
+    subgraph "Storage"
+        DB[(ChromaDB)]
+        FS[File System<br/>strategy_analyses/]
+    end
+
+    %% Connections
+    TAV --> NS1
+    WNA --> NS1
+    SERP -.-> NS1
+    
+    NS4 --> SA1
+    DB --> SA2
+    
+    SA5 --> CA1
+    
+    CA4 --> DB
+    CA4 --> FS
+
+    %% Styling
+    classDef datasource fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef process fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef storage fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+    
+    class TAV,WNA,SERP datasource
+    class NS1,NS2,NS3,NS4,SA1,SA2,SA3,SA4,SA5,CA1,CA2,CA3,CA4 process
+    class DB,FS storage

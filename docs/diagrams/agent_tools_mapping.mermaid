@@ -1,0 +1,61 @@
+graph TD
+    %% Agent-Tool Mapping for GPSE
+
+    subgraph "News Scout Agent"
+        NS[🔍 News Scout<br/>Information Curation Specialist]
+        
+        subgraph "Scout Tools"
+            T1[enhanced_news_search<br/>- Query Tavily & World News API<br/>- Get latest geopolitical news]
+            T2[aggregate_geopolitical_news<br/>- Combine results from sources<br/>- Remove duplicates<br/>- Filter by relevance]
+            T3[fetch_news_from_url<br/>- Extract full article content<br/>- Parse HTML to text]
+        end
+    end
+
+    subgraph "Strategic Analyst Agent"
+        SA[🧠 Strategic Analyst<br/>Lead Strategy Analyst]
+        
+        subgraph "Analyst Tools"
+            T4[query_strategy_database<br/>- Search ChromaDB<br/>- Find historical analyses<br/>- Get strategic context]
+            T5[enhanced_news_search<br/>- Additional searches<br/>- Verify information]
+        end
+    end
+
+    subgraph "Communicator Agent"
+        CA[📝 Communicator<br/>Communications & Archival Lead]
+        
+        subgraph "Communicator Tools"
+            T6[Document Generation<br/>- Format analysis<br/>- Structure sections<br/>- Quality control]
+            T7[File System Save<br/>- Save to strategy_analyses/<br/>- Name with date format]
+        end
+    end
+
+    %% Connections
+    NS --> T1
+    NS --> T2
+    NS --> T3
+    
+    SA --> T4
+    SA --> T5
+    
+    CA --> T6
+    CA --> T7
+
+    %% Tool Details
+    T1 -.-> |Returns| D1[News articles with<br/>title, URL, summary]
+    T2 -.-> |Returns| D2[Aggregated news<br/>by focus area]
+    T3 -.-> |Returns| D3[Full article text]
+    
+    T4 -.-> |Returns| D4[Historical analyses<br/>and patterns]
+    T5 -.-> |Returns| D5[Additional context]
+    
+    T6 -.-> |Creates| D6[Formatted markdown<br/>intelligence brief]
+    T7 -.-> |Saves| D7[GGSM-Date-DailyAnalysis.md]
+
+    %% Styling
+    classDef agent fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+    classDef tool fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef output fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px
+    
+    class NS,SA,CA agent
+    class T1,T2,T3,T4,T5,T6,T7 tool
+    class D1,D2,D3,D4,D5,D6,D7 output

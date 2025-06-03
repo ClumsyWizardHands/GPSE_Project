@@ -1,296 +1,259 @@
 # GPSE Architecture Documentation
 
-## System Architecture Overview
+## System Overview
 
-### High-Level Architecture
+The Geopolitical Grand Strategy Engine (GPSE) is a multi-agent AI system built on CrewAI that analyzes global geopolitical developments and produces strategic intelligence briefs. The system uses a pipeline architecture with three specialized agents working in sequence.
 
-```mermaid
-graph TB
-    subgraph "External Data Sources"
-        NEWS[News APIs<br/>Reuters, Bloomberg, etc.]
-        TAVILY[Tavily AI Research<br/>Deep Web Analysis]
-    end
-    
-    subgraph "GPSE Core System"
-        subgraph "Multi-Agent Orchestra"
-            CURATOR[📰 Information Curator<br/>News Gathering & Filtering]
-            ANALYST[🧠 Strategy Analyst<br/>Historical Context & Synthesis]
-            GEO[🌐 Geo-Strategic Analyst<br/>Pattern Recognition & Metadata]
-            COMMS[📄 Communications Lead<br/>Documentation & Archival]
-        end
-        
-        subgraph "Knowledge Base"
-            CHROMA[(ChromaDB<br/>Vector Storage)]
-            EMBED[Embedding Engine<br/>all-MiniLM-L6-v2]
-        end
-        
-        subgraph "Output Layer"
-            DOCS[Strategy Documents<br/>GGSM-MMDDYY-*.md]
-            ARCHIVE[Historical Archive<br/>strategy_analyses/]
-        end
-    end
-    
-    subgraph "User Interface"
-        SCHEDULE[Scheduler<br/>10 AM EST Daily]
-        ACCESS[Team Access<br/>6-7 Users]
-    end
-    
-    NEWS --> CURATOR
-    TAVILY --> CURATOR
-    CURATOR --> ANALYST
-    CHROMA --> ANALYST
-    ANALYST --> GEO
-    CHROMA --> GEO
-    GEO --> COMMS
-    COMMS --> DOCS
-    COMMS --> CHROMA
-    DOCS --> ARCHIVE
-    EMBED --> CHROMA
-    SCHEDULE --> CURATOR
-    ARCHIVE --> ACCESS
-    
-    style CURATOR fill:#ff6b6b,stroke:#fff,color:#fff
-    style ANALYST fill:#4ecdc4,stroke:#fff,color:#fff
-    style GEO fill:#45b7d1,stroke:#fff,color:#fff
-    style COMMS fill:#95e1d3,stroke:#fff,color:#fff
-    style CHROMA fill:#f39c12,stroke:#fff,color:#fff
+## Core Components
+
+### 1. Multi-Agent Framework (CrewAI)
+
+GPSE leverages CrewAI's sequential processing model where agents pass information through a defined workflow:
+
+```
+News Scout → Strategic Analyst → Communicator → Output
 ```
 
-## Agent Details
+Each agent has:
+- **Specific Role**: Defined expertise area
+- **Goal**: Clear objective for task completion
+- **Tools**: Access to specific functions
+- **Memory**: Enabled for context retention across runs
 
-### 1. Information Curation Specialist
-- **Model**: GPT-3.5-Turbo (cost-efficient)
-- **Primary Tools**:
-  - `gather_news()`: Aggregates from multiple news APIs
-  - `search_tavily()`: AI-powered deep research
-  - `filter_relevant()`: Relevance scoring
-- **Output**: Structured news digest with metadata
+### 2. Agent Specifications
 
-### 2. Lead Strategy Analyst
-- **Model**: Claude 4 Opus / GPT-4 Turbo
-- **Primary Tools**:
-  - `query_historical()`: ChromaDB semantic search
-  - `analyze_patterns()`: Pattern recognition
-  - `synthesize_strategy()`: Multi-perspective analysis
-- **Output**: Strategic assessment with historical context
+#### News Scout Agent
+- **Role**: Information Curation Specialist
+- **Responsibility**: Gather and filter geopolitical news from the last 24-48 hours
+- **Key Capabilities**:
+  - Multi-source news aggregation
+  - Duplicate removal
+  - Strategic relevance filtering
+  - Source attribution
+- **Tools Used**:
+  - `enhanced_news_search`: Queries Tavily and World News APIs
+  - `aggregate_geopolitical_news`: Combines and deduplicates results
+  - `fetch_news_from_url`: Extracts full article content
 
-### 3. Geo-Strategic Analyst
-- **Model**: Claude 4 Opus
-- **Primary Tools**:
-  - `StrategyDBQueryTool()`: Enhanced pattern extraction
-  - `tag_metadata()`: Structured tagging system
-  - `identify_flashpoints()`: Risk assessment
-- **Output**: Metadata-enriched strategic insights
+#### Strategic Analyst Agent
+- **Role**: Lead Strategy Analyst
+- **Responsibility**: Apply strategic frameworks to current events
+- **Key Capabilities**:
+  - Historical pattern analysis
+  - Strategic framework application
+  - Scenario generation
+  - Risk assessment
+- **Tools Used**:
+  - `query_strategy_database`: Searches ChromaDB for historical context
+  - `enhanced_news_search`: Additional fact-checking
 
-### 4. Communications & Archival Lead
-- **Model**: GPT-3.5-Turbo
-- **Primary Tools**:
-  - `format_document()`: Standardized formatting
-  - `save_to_archive()`: File management
-  - `update_vectordb()`: ChromaDB updates
-- **Output**: Final formatted documents
+#### Communicator Agent
+- **Role**: Communications & Archival Lead
+- **Responsibility**: Transform analysis into professional intelligence products
+- **Key Capabilities**:
+  - Document structuring
+  - Quality control
+  - Archival management
+- **Tools Used**:
+  - Document generation (built-in)
+  - File system operations
 
-## Data Flow Sequence
+### 3. Data Storage
 
-```mermaid
-sequenceDiagram
-    participant Scheduler
-    participant Curator
-    participant NewsAPIs
-    participant Tavily
-    participant Analyst
-    participant ChromaDB
-    participant GeoAnalyst
-    participant Comms
-    participant FileSystem
-    
-    Scheduler->>Curator: Initiate daily run
-    activate Curator
-    
-    par News Gathering
-        Curator->>NewsAPIs: Fetch recent events
-        NewsAPIs-->>Curator: Raw news data
-    and Research
-        Curator->>Tavily: Deep dive topics
-        Tavily-->>Curator: Enhanced context
-    end
-    
-    Curator->>Analyst: Curated information package
-    deactivate Curator
-    
-    activate Analyst
-    Analyst->>ChromaDB: Query: recent patterns, actors, events
-    ChromaDB-->>Analyst: Historical analyses (0-30 days)
-    
-    Analyst->>Analyst: Synthesize with context
-    Analyst->>GeoAnalyst: Initial strategic analysis
-    deactivate Analyst
-    
-    activate GeoAnalyst
-    GeoAnalyst->>ChromaDB: Deep pattern query
-    ChromaDB-->>GeoAnalyst: Long-term patterns
-    
-    GeoAnalyst->>GeoAnalyst: Apply metadata tags
-    Note right of GeoAnalyst: [Actors], [Ends],<br/>[Means], [Flashpoints]
-    
-    GeoAnalyst->>Comms: Enhanced analysis
-    deactivate GeoAnalyst
-    
-    activate Comms
-    Comms->>FileSystem: Save GGSM document
-    Comms->>ChromaDB: Store embeddings
-    
-    Note right of Comms: Document ID:<br/>GGSM-MMDDYY-Topic
-    
-    Comms->>Scheduler: Complete
-    deactivate Comms
+#### ChromaDB Vector Database
+- **Purpose**: Store and retrieve historical analyses
+- **Implementation**: Local persistent storage
+- **Windows Fixes**: 
+  - Short path (`C:\gpse_data`)
+  - Local segment manager
+  - Custom SQLite temp directory
+
+#### File System
+- **Output Directory**: `strategy_analyses/`
+- **Naming Convention**: `GGSM-[Date]-DailyAnalysis.md`
+- **Format**: Markdown for readability and portability
+
+### 4. External Integrations
+
+#### News APIs
+1. **Tavily API**
+   - Primary news search
+   - 1000 searches/month (free tier)
+   - High-quality relevance ranking
+
+2. **World News API**
+   - Secondary source
+   - Additional geographic coverage
+   - Fallback option
+
+3. **Serper API** (Optional)
+   - Google search results
+   - Enhanced coverage
+
+#### Language Model
+- **Provider**: OpenAI
+- **Model**: GPT-4o (recommended)
+- **Usage**: Agent reasoning and analysis
+- **Configuration**: Via environment variables
+
+## Data Flow
+
+### 1. Input Phase
+```
+External APIs → News Scout Agent
+    ↓
+    Tavily API ──┐
+    World News ──┼→ enhanced_news_search()
+    Serper API ──┘
+    ↓
+    aggregate_geopolitical_news()
+    ↓
+    Filtered News Summary
 ```
 
-## Vector Database Schema
-
-### Collection: `grand_strategy`
-
-```mermaid
-erDiagram
-    DOCUMENT {
-        string id PK "GGSM-MMDDYY-section"
-        string content "Text content"
-        vector embedding "384-dim vector"
-        json metadata "Structured data"
-    }
-    
-    METADATA {
-        string doc_type "executive_summary|analysis|scenario"
-        date created_date "ISO timestamp"
-        string[] actors "Identified entities"
-        string[] topics "Key themes"
-        float relevance_score "0.0-1.0"
-        string[] flashpoints "Risk areas"
-    }
-    
-    EMBEDDING {
-        string model "all-MiniLM-L6-v2"
-        int dimensions "384"
-        string method "sentence-transformers"
-    }
-    
-    DOCUMENT ||--|| METADATA : contains
-    DOCUMENT ||--|| EMBEDDING : has
+### 2. Analysis Phase
+```
+News Summary → Strategic Analyst Agent
+    ↓
+    query_strategy_database() ← ChromaDB
+    ↓
+    Apply Strategic Frameworks
+    ├── Power Competition Analysis
+    ├── Risk Assessment
+    ├── Trend Identification
+    └── Scenario Planning
+    ↓
+    Strategic Analysis Document
 ```
 
-## Metadata Tagging System
-
-### Tag Categories
-
-| Tag Type | Format | Example | Purpose |
-|----------|--------|---------|---------|
-| **[Actors]** | `[Actor: Entity Name]` | `[Actor: Russia]` | Identify key players |
-| **[Inferred Ends]** | `[End: Strategic Goal]` | `[End: Regional Hegemony]` | Strategic objectives |
-| **[Means]** | `[Means: Method/Tool]` | `[Means: Economic Pressure]` | Implementation methods |
-| **[Alignment]** | `[Align: Actor1-Actor2]` | `[Align: China-Russia]` | Relationship mapping |
-| **[Flashpoint]** | `[Flash: Location/Issue]` | `[Flash: Taiwan Strait]` | Risk identification |
-| **[Scenario]** | `[Scenario: Type-Probability]` | `[Scenario: Escalation-Medium]` | Future projections |
-
-## Performance Metrics
-
-### System Performance Targets
-
-```mermaid
-graph LR
-    subgraph "Processing Time"
-        A[News Gathering<br/>2-3 min] --> B[Analysis<br/>5-7 min]
-        B --> C[Documentation<br/>2-3 min]
-        C --> D[Total: <15 min]
-    end
-    
-    subgraph "Quality Metrics"
-        E[Sources: 15+] 
-        F[Relevance: >0.7]
-        G[Coverage: Global]
-        H[Depth: Multi-layer]
-    end
-    
-    subgraph "Cost Efficiency"
-        I[GPT-3.5: $2/day]
-        J[Claude 4: $15/day]
-        K[Storage: <1GB/month]
-        L[Total: <$20/day]
-    end
+### 3. Output Phase
+```
+Strategic Analysis → Communicator Agent
+    ↓
+    Document Structuring
+    ├── Executive Summary
+    ├── Critical Developments
+    ├── Strategic Assessment
+    └── Recommendations
+    ↓
+    Quality Control
+    ↓
+    Save to File System & Archive to ChromaDB
 ```
 
-## Security Architecture
+## Key Design Decisions
 
-```mermaid
-graph TB
-    subgraph "Security Layers"
-        ENV[Environment Variables<br/>.env file]
-        LOCAL[Local Storage Only<br/>No cloud sync]
-        ACCESS[File System Access<br/>OS-level permissions]
-        AUDIT[Audit Logging<br/>All operations tracked]
-    end
-    
-    subgraph "API Security"
-        KEYS[API Keys<br/>Never in code]
-        HTTPS[HTTPS Only<br/>Encrypted transit]
-        RATE[Rate Limiting<br/>Prevent abuse]
-    end
-    
-    subgraph "Data Security"
-        VECTOR[Local ChromaDB<br/>On-premise storage]
-        DOCS[Sensitive Documents<br/>Access controlled]
-    end
-    
-    ENV --> KEYS
-    LOCAL --> VECTOR
-    ACCESS --> DOCS
-    AUDIT --> RATE
-    
-    style ENV fill:#e74c3c,stroke:#fff,color:#fff
-    style LOCAL fill:#3498db,stroke:#fff,color:#fff
-    style ACCESS fill:#2ecc71,stroke:#fff,color:#fff
-```
+### 1. Sequential Processing
+- **Rationale**: Ensures each agent completes its task before passing to the next
+- **Benefits**: Clear data flow, easier debugging, predictable outputs
+- **Trade-off**: Longer processing time vs parallel execution
 
-## Scalability Considerations
+### 2. Tool Specialization
+- **Rationale**: Each agent has access only to tools needed for its role
+- **Benefits**: Security, focused functionality, cleaner architecture
+- **Example**: Only News Scout can search news; only Analyst can query history
 
-### Current Limitations
-- Single-threaded processing
-- Batch-only (not real-time)
-- English language only
-- 6-7 user limit
+### 3. Memory System
+- **Implementation**: CrewAI's built-in memory with ChromaDB backend
+- **Benefits**: Context retention, learning from past analyses
+- **Windows Fix**: Custom environment variables prevent permission errors
 
-### Future Scaling Path
-1. **Phase 1**: Parallel agent processing
-2. **Phase 2**: Multi-language support
-3. **Phase 3**: Real-time event streams
-4. **Phase 4**: Multi-tenant architecture
+### 4. Markdown Output
+- **Rationale**: Human-readable, version-control friendly, portable
+- **Benefits**: Easy to read, share, and process
+- **Structure**: Consistent sections for automated parsing
 
-## Monitoring & Observability
+## Error Handling
 
-### Key Metrics to Track
+### 1. API Failures
+- **Strategy**: Graceful degradation
+- **Implementation**: Try multiple sources, continue with available data
+- **User Notification**: Warnings in output about missing sources
 
-| Metric | Target | Alert Threshold |
-|--------|--------|-----------------|
-| Daily Run Success | 95%+ | <90% |
-| Processing Time | <15 min | >20 min |
-| API Success Rate | 98%+ | <95% |
-| Document Quality Score | >0.8 | <0.7 |
-| Token Usage | <100k/day | >150k/day |
-| Vector DB Size | <1GB | >2GB |
+### 2. ChromaDB Issues
+- **Primary Fix**: Windows-specific environment variables
+- **Fallback**: System continues without historical context
+- **Recovery**: Automatic retry on next run
 
-### Logging Strategy
+### 3. Rate Limiting
+- **Detection**: API response codes
+- **Handling**: Exponential backoff
+- **User Guidance**: Clear error messages with solutions
 
-```python
-# Structured logging format
-{
-    "timestamp": "2025-06-02T10:00:00Z",
-    "agent": "strategy_analyst",
-    "action": "query_historical",
-    "duration_ms": 1250,
-    "tokens_used": 3500,
-    "status": "success",
-    "metadata": {
-        "query_terms": ["Russia", "energy", "Europe"],
-        "results_count": 15,
-        "relevance_avg": 0.85
-    }
-}
+## Performance Characteristics
+
+### Typical Execution Time
+- **News Gathering**: 1-2 minutes
+- **Analysis**: 2-3 minutes
+- **Document Generation**: 1 minute
+- **Total**: 4-6 minutes
+
+### Resource Usage
+- **Memory**: ~500MB during execution
+- **Storage**: ~10MB per analysis
+- **Network**: ~50 API calls per run
+
+### Scalability Considerations
+- **Current**: Single-threaded sequential processing
+- **Future**: Could parallelize news gathering
+- **Limitation**: API rate limits are the primary constraint
+
+## Security Considerations
+
+### 1. API Key Management
+- **Storage**: Local `.env` file
+- **Access**: Environment variables only
+- **Rotation**: Manual process required
+
+### 2. Data Privacy
+- **Sources**: Public news only
+- **Storage**: Local file system
+- **Transmission**: HTTPS for all API calls
+
+### 3. Output Security
+- **Classification**: Unclassified open-source intelligence
+- **Distribution**: User-controlled
+- **Retention**: Indefinite local storage
+
+## Future Architecture Enhancements
+
+### 1. Web Interface
+- **Technology**: FastAPI + React
+- **Benefits**: Easier access, better visualization
+- **Challenge**: Deployment complexity
+
+### 2. Distributed Processing
+- **Approach**: Celery task queue
+- **Benefits**: Faster execution, better reliability
+- **Challenge**: Infrastructure requirements
+
+### 3. Enhanced Memory
+- **Approach**: Fine-tuned embeddings
+- **Benefits**: Better historical recall
+- **Challenge**: Computational requirements
+
+## Monitoring and Maintenance
+
+### 1. Logging
+- **Level**: INFO by default
+- **Location**: Console output
+- **Format**: Timestamp, component, message
+
+### 2. Health Checks
+- **API Connectivity**: Pre-flight checks
+- **Database Access**: Startup verification
+- **Output Validation**: Post-generation checks
+
+### 3. Maintenance Tasks
+- **Database Cleanup**: Manual, as needed
+- **Log Rotation**: Not implemented
+- **Backup**: User responsibility
+
+---
+
+## Diagram References
+
+For visual representations of the architecture:
+- [System Architecture](diagrams/system_architecture.mermaid)
+- [Data Flow](diagrams/data_flow.mermaid)
+- [Agent-Tool Mapping](diagrams/agent_tools_mapping.mermaid)

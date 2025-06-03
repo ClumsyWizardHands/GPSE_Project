@@ -1,437 +1,296 @@
 """
-GPSE Main Crew - FINAL FIXED VERSION
-Fixes all execution issues including double path and missing analysis_id
+GPSE Main Crew - Windows Memory Working Version
+Uses Windows fixes that were proven to work in testing
 """
+
+# Apply Windows-specific fixes
+try:
+    import pysqlite3
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+    print("✓ Applied pysqlite3-binary fix for Windows")
+except ImportError:
+    print("⚠️ pysqlite3-binary not available - using standard sqlite3")
 
 import os
 import sys
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
 from pathlib import Path
+from typing import Dict, Any
 from dotenv import load_dotenv
 
-# CrewAI imports
-from crewai import Agent, Crew, Process, Task
-from crewai.project import CrewBase, agent, crew, task, before_kickoff, after_kickoff
+# Apply Windows-specific fixes BEFORE importing CrewAI/ChromaDB
+os.environ["CREWAI_STORAGE_DIR"] = r"C:\gpse_data"
+os.environ["CHROMA_SEGMENT_MANAGER_IMPL"] = "local"
+os.environ["SQLITE_TMPDIR"] = os.environ.get("TEMP", r"C:\temp")
 
-# LangChain imports for LLM initialization
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
+# Ensure the storage directory exists
+storage_path = Path(os.environ["CREWAI_STORAGE_DIR"])
+storage_path.mkdir(parents=True, exist_ok=True)
+print(f"✓ Storage directory ready: {storage_path}")
 
-# Import custom tools
-from gpse_tools import (
-    query_strategy_database,
-    get_date_code,
-    get_timestamp,
-    ensure_directory
-)
+# Now import CrewAI
+from crewai import Agent, Task, Crew, Process
 
-# Import enhanced news tools
-from gpse_tools import (
+# Import tools
+from gpse_tools_comprehensive import (
     enhanced_news_search,
     fetch_news_from_url,
-    aggregate_geopolitical_news
+    aggregate_geopolitical_news,
+    query_strategy_database
 )
 
-# Import communicator tools
-from communicator_agent_implementation import (
-    FileWriterTool,
-    StrategyDBUpdateTool as CommunicatorDBUpdateTool,
-    create_communicator_agent
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-def setup_logging():
-    """Set up logging configuration"""
-    log_dir = Path("logs")
-    ensure_directory(log_dir)
-    
-    log_filename = f'logs/gpse_fixed_final_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
-    
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_filename),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
-    return logging.getLogger(__name__)
+# Custom LLM configuration
+os.environ["OPENAI_MODEL_NAME"] = "gpt-4o"
 
-logger = setup_logging()
-
-
-@CrewBase
-class GPSECrewFixedFinal():
-    """Final fixed GPSE Crew with all issues resolved"""
+class GPSECrew:
+    """GPSE Crew with Windows Memory Fixes"""
     
-    agents_config = 'config/agents.yaml'
-    tasks_config = 'config/tasks_simplified.yaml'
-    
-    def __init__(self, inputs: Optional[Dict[str, Any]] = None):
+    def __init__(self):
         """Initialize the GPSE Crew"""
-        self.inputs = inputs or {}
-        self.project_root = Path(__file__).parent
-        self.strategy_dir = self.project_root / "strategy_analyses"
-        self.logs_dir = self.project_root / "logs"
-        
-        # Store analysis metadata
-        self.analysis_metadata = {}
-        
-        ensure_directory(self.strategy_dir)
-        ensure_directory(self.logs_dir)
-        
-        self._initialize_tools()
-        self._initialize_llms()
-        
-        logger.info("Initialized GPSE Crew - FINAL FIXED VERSION")
-    
-    def _initialize_tools(self):
-        """Initialize all required tools"""
-        self.db_query_tool = query_strategy_database
-        self.enhanced_news_tool = enhanced_news_search
-        self.url_fetch_tool = fetch_news_from_url
-        self.news_aggregator_tool = aggregate_geopolitical_news
-        self.file_writer_tool = FileWriterTool()
-        self.communicator_db_tool = CommunicatorDBUpdateTool()
-        
-        logger.info("Tools initialized successfully")
-    
-    def _initialize_llms(self):
-        """Initialize LLMs with better context window management"""
-        self.llm_provider = os.getenv('LLM_PROVIDER', 'openai')
-        self.openai_api_key = os.getenv('OPENAI_API_KEY')
-        self.anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
-        
-        if self.llm_provider == 'anthropic' and self.anthropic_api_key:
-            # Claude models have larger context windows
-            self.powerful_llm = ChatAnthropic(
-                model="claude-3-opus-20240229",
-                api_key=self.anthropic_api_key,
-                temperature=0.7,
-                max_tokens=3000  # Reduced to leave room for context
-            )
-            self.efficient_llm = ChatAnthropic(
-                model="claude-3-haiku-20240307",
-                api_key=self.anthropic_api_key,
-                temperature=0.7,
-                max_tokens=1500
-            )
-            logger.info("Using Anthropic models with larger context windows")
-        else:
-            # Use GPT-4 Turbo with 128k context window
-            self.powerful_llm = ChatOpenAI(
-                model="gpt-4-0125-preview",  # Latest GPT-4 Turbo with 128k context
-                api_key=self.openai_api_key,
-                temperature=0.7,
-                max_tokens=3000
-            )
-            # Use GPT-3.5 Turbo 16k for better context handling
-            self.efficient_llm = ChatOpenAI(
-                model="gpt-3.5-turbo-1106",  # 16k context version
-                api_key=self.openai_api_key,
-                temperature=0.7,
-                max_tokens=1500
-            )
-            logger.info("Using OpenAI models with extended context windows")
-    
-    @before_kickoff
-    def prepare_analysis(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Prepare for analysis run"""
-        logger.info("=" * 60)
-        logger.info("GPSE - FINAL FIXED VERSION")
-        logger.info("=" * 60)
-        logger.info(f"Starting at {get_timestamp()}")
-        
-        if not self._validate_environment():
-            raise EnvironmentError("Environment validation failed")
-        
-        # Add all necessary metadata
-        inputs['timestamp'] = datetime.now().isoformat()
-        inputs['date_code'] = get_date_code()
-        inputs['analysis_id'] = f"GGSM-{get_date_code()}-DailyAnalysis"
-        
-        # Store analysis metadata for post-processing
-        self.analysis_metadata = {
-            'analysis_id': inputs['analysis_id'],
-            'timestamp': inputs['timestamp'],
-            'date_code': inputs['date_code']
-        }
-        
-        logger.info(f"Analysis ID: {inputs['analysis_id']}")
-        return inputs
-    
-    @after_kickoff
-    def post_process_results(self, result: Any) -> Any:
-        """Post-process results"""
-        logger.info("Post-processing results...")
-        
         try:
-            start_time = datetime.fromisoformat(self.analysis_metadata.get('timestamp', datetime.now().isoformat()))
-            execution_time = (datetime.now() - start_time).total_seconds()
-            logger.info(f"Execution time: {execution_time:.2f} seconds")
+            # Initialize shared tools
+            self.news_tool = enhanced_news_search
+            self.url_fetch_tool = fetch_news_from_url
+            self.aggregator_tool = aggregate_geopolitical_news
+            self.database_tool = query_strategy_database
             
-            # Use stored metadata instead of self.inputs
-            expected_path = self.strategy_dir / f"{self.analysis_metadata['analysis_id']}.md"
+            logger.info("Tools initialized successfully")
             
-            if expected_path.exists():
-                logger.info(f"SUCCESS: Analysis saved to {expected_path}")
-                logger.info(f"File size: {expected_path.stat().st_size} bytes")
-            else:
-                logger.error(f"FAILURE: Expected file not found: {expected_path}")
+            # Get current date for context
+            self.current_date = datetime.now().strftime("%B %d, %Y")
             
-            logger.info("=" * 60)
+            # Initialize LLM configuration
+            self.llm_config = self._get_llm_config()
+            
+            logger.info("GPSE Crew initialized with Windows Memory Fixes")
             
         except Exception as e:
-            logger.error(f"Post-processing error: {e}")
-            # Don't raise, just log the error
-        
-        return result
+            logger.error(f"Failed to initialize GPSE Crew: {str(e)}")
+            raise
     
-    @agent
+    def _get_llm_config(self) -> Dict[str, Any]:
+        """Get LLM configuration"""
+        logger.info("Using OpenAI GPT-4o model")
+        return {
+            "model": "gpt-4o",
+            "temperature": 0.7,
+            "max_tokens": 4000
+        }
+    
     def news_scout(self) -> Agent:
-        """News Scout with optimized output"""
-        config = self.agents_config['news_scout'].copy()
-        
-        config['backstory'] = """Expert news researcher with access to multiple APIs.
-
-CRITICAL INSTRUCTIONS:
-1. Use 'Geopolitical News Aggregator' to gather news
-2. Use 'Direct URL News Fetch' for key articles
-3. LIMIT output to 5-7 most important articles
-4. Keep summaries concise (2-3 sentences each)
-
-OUTPUT FORMAT:
-For each article provide:
-- Title
-- Source & Date
-- 2-3 sentence summary
-- Strategic relevance (1 sentence)
-
-KEEP TOTAL OUTPUT UNDER 2000 WORDS to avoid context issues."""
-        
+        """Create News Scout Agent"""
         return Agent(
-            config=config,
-            tools=[self.news_aggregator_tool, self.enhanced_news_tool, self.url_fetch_tool],
-            llm=self.efficient_llm,
-            max_iter=5,
-            memory=True,
-            verbose=True,
-            allow_delegation=False
-        )
-    
-    @agent
-    def geo_analyst(self) -> Agent:
-        """Geopolitical Analyst with context management"""
-        config = self.agents_config['geo_analyst'].copy()
-        
-        config['backstory'] = """Senior geopolitical strategist.
-
-CRITICAL INSTRUCTIONS:
-1. Query Strategy Database for historical context
-2. Analyze news from scout's report
-3. Create CONCISE strategic analysis
-
-OUTPUT STRUCTURE (keep each section brief):
-- Executive Summary (150 words max)
-- 3-4 Primary Observations (200 words each max)
-- Scenario Implications (200 words max)
-
-TOTAL OUTPUT: 1500 words maximum"""
-        
-        return Agent(
-            config=config,
-            tools=[self.db_query_tool],
-            llm=self.powerful_llm,
+            role='Geopolitical News Scout',
+            goal='Identify and analyze breaking geopolitical developments with focus on China-US-Russia dynamics',
+            backstory="""You are an elite intelligence analyst specializing in real-time geopolitical 
+            monitoring. Your expertise lies in identifying significant developments in international 
+            relations, military movements, economic policies, and diplomatic initiatives. You have 
+            deep knowledge of global power dynamics and can quickly assess the strategic importance 
+            of emerging events.""",
+            tools=[self.news_tool, self.aggregator_tool, self.url_fetch_tool],
+            llm_config=self.llm_config,
             max_iter=3,
-            memory=True,
             verbose=True,
-            allow_delegation=False
+            memory=True  # Enable memory
         )
     
-    @agent
-    def communicator(self) -> Agent:
-        """Communicator with file saving focus"""
-        base_agent = create_communicator_agent(self.powerful_llm)
-        
-        base_agent.backstory += """
-
-EXECUTION REQUIREMENTS:
-1. Format the analysis as GGSM document
-2. SAVE using File Writer Tool with filename: GGSM-{date}-DailyAnalysis.md
-   (DO NOT include 'strategy_analyses/' in the filename - the tool adds it automatically)
-3. ADD to ChromaDB using Strategy Database Update Tool
-4. Keep formatting clean and professional
-
-MUST ACTUALLY EXECUTE - not describe!"""
-        
-        return base_agent
+    def geo_analyst(self) -> Agent:
+        """Create Geopolitical Analyst Agent"""
+        return Agent(
+            role='Strategic Geopolitical Analyst',
+            goal='Provide deep strategic analysis of global power dynamics and their implications',
+            backstory="""You are a senior strategic analyst with decades of experience in international 
+            relations and military strategy. You specialize in analyzing the complex interplay between 
+            China, the United States, and Russia, understanding their strategic doctrines, capabilities, 
+            and long-term objectives. Your analysis integrates military, economic, technological, and 
+            diplomatic dimensions to provide comprehensive strategic assessments.""",
+            tools=[self.database_tool, self.news_tool],
+            llm_config=self.llm_config,
+            max_iter=3,
+            verbose=True,
+            memory=True  # Enable memory
+        )
     
-    @task
-    def news_scout_task(self) -> Task:
-        """Optimized news gathering task"""
+    def communicator(self) -> Agent:
+        """Create Strategic Communicator Agent"""
+        return Agent(
+            role='Strategic Communications Specialist',
+            goal='Transform complex geopolitical analysis into clear, actionable intelligence briefs',
+            backstory="""You are an expert strategic communicator who specializes in distilling complex 
+            geopolitical analysis into clear, actionable intelligence products. You understand how to 
+            present information to decision-makers, highlighting key insights, strategic implications, 
+            and actionable recommendations. Your communication is precise, structured, and focused on 
+            strategic value.""",
+            tools=[],
+            llm_config=self.llm_config,
+            max_iter=2,
+            verbose=True,
+            memory=True  # Enable memory
+        )
+    
+    def scout_task(self) -> Task:
+        """Create news scouting task"""
         return Task(
-            description="""Gather current geopolitical news:
-
-1. Use 'Geopolitical News Aggregator' for:
-   - Ukraine-Russia conflict
-   - Middle East tensions
-   - US-China relations
-   - Major economic/cyber events
-
-2. Select 5-7 MOST SIGNIFICANT articles
-3. Use 'Direct URL News Fetch' for top 3-5 articles
-4. Create CONCISE briefing (under 2000 words)
-
-Focus on QUALITY over quantity.""",
-            expected_output="Concise news briefing with 5-7 key articles, summaries, and strategic relevance",
+            description=f"""Conduct comprehensive geopolitical news reconnaissance for {self.current_date}.
+            
+            Focus Areas:
+            1. China-US-Russia strategic developments
+            2. Military movements and defense initiatives
+            3. Economic policies and trade dynamics
+            4. Diplomatic engagements and tensions
+            5. Technology competition and security concerns
+            
+            Requirements:
+            - Use the news search and aggregator tools to find REAL current news
+            - Identify 5-7 most significant developments from actual sources
+            - Verify information from multiple sources
+            - Assess immediate strategic implications
+            - Flag any breaking or urgent developments
+            
+            Output Format:
+            - Executive Summary (2-3 sentences)
+            - Key Developments (bullet points with actual sources and URLs)
+            - Strategic Implications
+            - Confidence Assessment""",
+            expected_output="Comprehensive geopolitical news brief with verified developments and initial strategic assessment",
             agent=self.news_scout()
         )
     
-    @task
-    def geo_analyst_task(self) -> Task:
-        """Optimized analysis task"""
+    def analysis_task(self) -> Task:
+        """Create strategic analysis task"""
         return Task(
-            description="""Create strategic analysis:
-
-1. Query Strategy Database for context
-2. Analyze news briefing
-3. Produce GGSM-format analysis:
-   - Executive Summary (150 words)
-   - 3-4 Actor Observations (200 words each)
-   - Scenario Implications (200 words)
-
-Keep TOTAL under 1500 words.""",
-            expected_output="Concise GGSM-format strategic analysis",
-            agent=self.geo_analyst(),
-            context=[self.news_scout_task()]
+            description=f"""Conduct deep strategic analysis of the geopolitical developments identified.
+            
+            Analysis Framework:
+            1. Strategic Context: How do these developments fit into broader power competition?
+            2. Actor Analysis: Motivations, capabilities, and constraints of key players
+            3. Trend Identification: What patterns are emerging or accelerating?
+            4. Risk Assessment: What are the escalation risks and strategic vulnerabilities?
+            5. Forecast: Likely developments in next 30-90 days
+            
+            Requirements:
+            - Use the database tool to find relevant historical context
+            - Apply strategic frameworks (deterrence theory, balance of power, etc.)
+            - Consider multiple scenarios and their probabilities
+            - Identify strategic opportunities and threats
+            - Provide evidence-based assessments
+            
+            Include historical context where relevant but focus on current implications.""",
+            expected_output="Comprehensive strategic analysis with scenarios, risks, and actionable insights",
+            agent=self.geo_analyst()
         )
     
-    @task
-    def communicator_task(self) -> Task:
-        """File saving task - FIXED PATH ISSUE"""
+    def communication_task(self) -> Task:
+        """Create strategic communication task"""
         return Task(
-            description=f"""SAVE the analysis:
-
-1. Format as GGSM document
-2. SAVE using File Writer Tool with filename: GGSM-{get_date_code()}-DailyAnalysis.md
-   IMPORTANT: Do NOT include 'strategy_analyses/' in the filename!
-3. ADD to ChromaDB using full path: strategy_analyses/GGSM-{get_date_code()}-DailyAnalysis.md
-4. Report success
-
-EXECUTE don't describe!""",
-            expected_output="Confirmation of file saved and database updated",
+            description=f"""Create a strategic intelligence brief for senior decision-makers.
+            
+            Brief Requirements:
+            1. Executive Summary: Key findings and recommendations (1 paragraph)
+            2. Strategic Situation: Current state of great power competition
+            3. Critical Developments: Most important changes and their implications
+            4. Strategic Assessment: Risks, opportunities, and trending indicators
+            5. Recommendations: Specific, actionable strategic options
+            
+            Style Guidelines:
+            - Clear, concise, and direct language
+            - Highlight actionable intelligence
+            - Use strategic terminology appropriately
+            - Include confidence levels for assessments
+            
+            Format as a professional intelligence product suitable for high-level briefing.""",
+            expected_output="Professional strategic intelligence brief with clear findings and actionable recommendations",
             agent=self.communicator(),
-            context=[self.geo_analyst_task()]
+            output_file=f'strategy_analyses/GGSM-{self.current_date}-DailyAnalysis.md'
         )
     
-    @crew
     def crew(self) -> Crew:
-        """Optimized crew configuration"""
+        """Create and configure the crew"""
+        logger.info("Creating crew with memory enabled")
+        
         return Crew(
-            agents=self.agents,
-            tasks=self.tasks,
+            agents=[
+                self.news_scout(),
+                self.geo_analyst(),
+                self.communicator()
+            ],
+            tasks=[
+                self.scout_task(),
+                self.analysis_task(),
+                self.communication_task()
+            ],
             process=Process.sequential,
-            memory=True,
-            embedder={
-                "provider": "openai",
-                "config": {
-                    "model": "text-embedding-3-small"
-                }
-            },
-            planning=False,  # Execution mode
             verbose=True,
-            max_rpm=10,
-            share_crew=False,
-            # Prevent context overflow
-            memory_config={
-                "max_memory_length": 5,  # Limit memory to last 5 interactions
-                "summarize_mode": "progressive"  # Summarize older memories
-            }
+            memory=True  # Enable memory with Windows fixes
         )
-    
-    def _validate_environment(self) -> bool:
-        """Validate environment"""
-        issues = []
-        
-        if not self.openai_api_key and not self.anthropic_api_key:
-            issues.append("No LLM API key found")
-        
-        if not os.getenv('TAVILY_API_KEY'):
-            issues.append("TAVILY_API_KEY not found")
-        
-        try:
-            from db_manager import ChromaDBManager
-            db = ChromaDBManager()
-            _ = db.collection.count()
-            logger.info("ChromaDB verified")
-        except Exception as e:
-            logger.warning(f"ChromaDB warning: {e}")
-        
-        if issues:
-            logger.error("Validation failed:")
-            for issue in issues:
-                logger.error(f"  - {issue}")
-            return False
-        
-        logger.info("Environment validated")
-        return True
-
 
 def main():
-    """Main execution"""
+    """Main execution function"""
     try:
-        logger.info("Starting GPSE Fixed Final...")
-        gpse_crew = GPSECrewFixedFinal()
+        print("\n" + "="*60)
+        print("GEOPOLITICAL GRAND STRATEGY ENGINE (GPSE)")
+        print("Windows Memory Working Version")
+        print("="*60 + "\n")
         
-        inputs = {
-            "focus_areas": [
-                "Ukraine-Russia conflict",
-                "Middle East tensions",
-                "US-China relations"
-            ],
-            "quality_threshold": 0.8,
-            "time_window": "24 hours"
-        }
+        print(f"Execution started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Storage directory: {os.environ['CREWAI_STORAGE_DIR']}")
         
+        logger.info("Starting GPSE with Windows Memory Fixes...")
+        
+        # Create output directory
+        os.makedirs('strategy_analyses', exist_ok=True)
+        
+        # Initialize crew
+        gpse_crew = GPSECrew()
+        
+        # Create crew instance
         crew_instance = gpse_crew.crew()
         
-        logger.info("=" * 60)
-        logger.info("EXECUTING FIXED FINAL CREW...")
-        logger.info("All path and metadata issues resolved")
-        logger.info("=" * 60)
+        # Execute crew
+        logger.info("Executing GPSE crew...")
+        result = crew_instance.kickoff()
         
-        result = crew_instance.kickoff(inputs=inputs)
+        logger.info("GPSE execution completed successfully!")
+        logger.info(f"Results: {result}")
         
-        # Safe result logging
-        try:
-            if hasattr(result, 'raw'):
-                logger.info(f"Result preview: {str(result.raw)[:300]}...")
-            else:
-                logger.info("Result received (details not stringifiable)")
-        except:
-            logger.info("Result received")
-        
-        # Verify file creation
-        expected_file = Path(f"strategy_analyses/GGSM-{get_date_code()}-DailyAnalysis.md")
-        if expected_file.exists():
-            logger.info(f"SUCCESS: {expected_file}")
-            with open(expected_file, 'r', encoding='utf-8') as f:
-                preview = f.read()[:500]
-                logger.info(f"File preview:\n{preview}...")
-        else:
-            logger.error("FAILURE: No file created")
-        
-        return result
+        # Display results
+        print("\n" + "="*50)
+        print("GPSE ANALYSIS COMPLETE")
+        print("="*50)
+        print(f"\nAnalysis saved to: strategy_analyses/GGSM-{datetime.now().strftime('%B %d, %Y')}-DailyAnalysis.md")
+        print("\nKey Findings:")
+        print("-" * 50)
+        if result:
+            print(result)
         
     except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        raise
-
+        logger.error(f"Critical error: {str(e)}")
+        print("\n" + "="*60)
+        print("ERROR DURING EXECUTION")
+        print("="*60)
+        print(f"Error: {str(e)}")
+        
+        if "permission" in str(e).lower() or "chromadb" in str(e).lower():
+            print("\nChromaDB Error Detected!")
+            print("Try these solutions:")
+            print("1. Run as Administrator (one time)")
+            print("2. Check antivirus isn't blocking")
+            print("3. Use no-memory version if issue persists")
+        
+        logger.exception("Full traceback:")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

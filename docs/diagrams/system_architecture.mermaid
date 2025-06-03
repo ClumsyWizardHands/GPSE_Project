@@ -1,0 +1,49 @@
+graph TB
+    %% Main system components
+    subgraph "GPSE System"
+        direction TB
+        
+        subgraph "Input Sources"
+            NS[News APIs<br/>- Tavily<br/>- World News API]
+            DB[(ChromaDB<br/>Historical Context)]
+        end
+        
+        subgraph "CrewAI Multi-Agent Framework"
+            direction LR
+            A1[🔍 News Scout<br/>Agent]
+            A2[🧠 Strategic Analyst<br/>Agent]
+            A3[📝 Communicator<br/>Agent]
+            
+            A1 --> A2
+            A2 --> A3
+        end
+        
+        subgraph "Output"
+            OUT[📄 Strategic Intelligence Brief<br/>GGSM-Date-DailyAnalysis.md]
+            STORE[(ChromaDB<br/>Archive)]
+        end
+    end
+    
+    %% Data flow
+    NS --> A1
+    DB --> A2
+    A1 --> |News Summary| A2
+    A2 --> |Strategic Analysis| A3
+    A3 --> OUT
+    A3 --> STORE
+    
+    %% Tool connections
+    A1 -.-> |Uses| T1[enhanced_news_search<br/>aggregate_geopolitical_news<br/>fetch_news_from_url]
+    A2 -.-> |Uses| T2[query_strategy_database<br/>enhanced_news_search]
+    A3 -.-> |Uses| T3[Document Generation<br/>Archival Tools]
+    
+    %% Styling
+    classDef agent fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef tool fill:#fff3e0,stroke:#e65100,stroke-width:1px
+    classDef storage fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef output fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    
+    class A1,A2,A3 agent
+    class T1,T2,T3 tool
+    class DB,STORE storage
+    class OUT output
