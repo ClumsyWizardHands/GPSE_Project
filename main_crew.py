@@ -8,9 +8,10 @@ try:
     import pysqlite3
     import sys
     sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-    print("✓ Applied pysqlite3-binary fix for Windows")
+    print("Applied pysqlite3-binary fix for Windows")
 except ImportError:
-    print("⚠️ pysqlite3-binary not available - using standard sqlite3")
+    print("Note: pysqlite3-binary not available - using standard sqlite3")
+    pass  # Continue without pysqlite3
 
 import os
 import sys
@@ -28,10 +29,15 @@ os.environ["SQLITE_TMPDIR"] = os.environ.get("TEMP", r"C:\temp")
 # Ensure the storage directory exists
 storage_path = Path(os.environ["CREWAI_STORAGE_DIR"])
 storage_path.mkdir(parents=True, exist_ok=True)
-print(f"✓ Storage directory ready: {storage_path}")
+print(f"Storage directory ready: {storage_path}")
 
 # Now import CrewAI
 from crewai import Agent, Task, Crew, Process
+
+# Import LangChain LLM modules
+from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_anthropic import ChatAnthropic
 
 # Import tools
 from gpse_tools_comprehensive import (
@@ -51,9 +57,6 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# Custom LLM configuration
-os.environ["OPENAI_MODEL_NAME"] = "gpt-4o"
-
 class GPSECrew:
     """GPSE Crew with Windows Memory Fixes"""
     
@@ -71,8 +74,12 @@ class GPSECrew:
             # Get current date for context
             self.current_date = datetime.now().strftime("%B %d, %Y")
             
-            # Initialize LLM configuration
-            self.llm_config = self._get_llm_config()
+            # Initialize output filepath
+            output_filename = f'strategy_analyses/GGSM-{self.current_date}-DailyAnalysis.md'
+            self.output_filepath = os.path.abspath(output_filename)
+            
+            # Initialize LLM instances for each agent
+            self._initialize_llms()
             
             logger.info("GPSE Crew initialized with Windows Memory Fixes")
             
@@ -80,14 +87,24 @@ class GPSECrew:
             logger.error(f"Failed to initialize GPSE Crew: {str(e)}")
             raise
     
-    def _get_llm_config(self) -> Dict[str, Any]:
-        """Get LLM configuration"""
-        logger.info("Using OpenAI GPT-4o model")
-        return {
-            "model": "gpt-4o",
-            "temperature": 0.7,
-            "max_tokens": 4000
-        }
+    def _initialize_llms(self):
+        """Initialize different LLM configurations for each agent"""
+        # News Scout: Claude 3.5 Haiku for fast, efficient news processing
+        self.news_scout_llm = ChatAnthropic(
+            model="claude-3-5-haiku-20241022",
+            temperature=0.7,
+            max_tokens=4000,
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
+        )
+        logger.info("News Scout LLM: Claude 3.5 Haiku (fast processing)")
+        
+        # Geopolitical Analyst: GPT-4o (OpenAI's reasoning model)
+        self.geo_analyst_llm = "gpt-4o"
+        logger.info("Geopolitical Analyst LLM: GPT-4o (deep reasoning)")
+        
+        # Communicator: GPT-4o Mini
+        self.communicator_llm = "gpt-4o-mini"
+        logger.info("Communicator LLM: GPT-4o Mini (efficient output)")
     
     def news_scout(self) -> Agent:
         """Create News Scout Agent"""
@@ -100,7 +117,7 @@ class GPSECrew:
             deep knowledge of global power dynamics and can quickly assess the strategic importance 
             of emerging events.""",
             tools=[self.news_tool, self.aggregator_tool, self.url_fetch_tool],
-            llm_config=self.llm_config,
+            llm=self.news_scout_llm,  # Use Claude 3.5 Haiku
             max_iter=3,
             verbose=True,
             memory=True  # Enable memory
@@ -117,7 +134,7 @@ class GPSECrew:
             and long-term objectives. Your analysis integrates military, economic, technological, and 
             diplomatic dimensions to provide comprehensive strategic assessments.""",
             tools=[self.database_tool, self.news_tool],
-            llm_config=self.llm_config,
+            llm=self.geo_analyst_llm,  # Use GPT-4o
             max_iter=3,
             verbose=True,
             memory=True  # Enable memory
@@ -134,7 +151,7 @@ class GPSECrew:
             and actionable recommendations. Your communication is precise, structured, and focused on 
             strategic value.""",
             tools=[],
-            llm_config=self.llm_config,
+            llm=self.communicator_llm,  # Use GPT-4o Mini
             max_iter=2,
             verbose=True,
             memory=True  # Enable memory
@@ -194,6 +211,9 @@ class GPSECrew:
     
     def communication_task(self) -> Task:
         """Create strategic communication task"""
+        # Use the output filepath that was already initialized
+        output_filename = f'strategy_analyses/GGSM-{self.current_date}-DailyAnalysis.md'
+        
         return Task(
             description=f"""Create a strategic intelligence brief for senior decision-makers.
             
@@ -210,10 +230,12 @@ class GPSECrew:
             - Use strategic terminology appropriately
             - Include confidence levels for assessments
             
-            Format as a professional intelligence product suitable for high-level briefing.""",
-            expected_output="Professional strategic intelligence brief with clear findings and actionable recommendations",
+            Format as a professional intelligence product suitable for high-level briefing.
+            
+            IMPORTANT: After saving the document, include the absolute file path in your response.""",
+            expected_output=f"Professional strategic intelligence brief saved to {self.output_filepath}",
             agent=self.communicator(),
-            output_file=f'strategy_analyses/GGSM-{self.current_date}-DailyAnalysis.md'
+            output_file=output_filename
         )
     
     def crew(self) -> Crew:
@@ -238,6 +260,8 @@ class GPSECrew:
 
 def main():
     """Main execution function"""
+    output_filepath = None
+    
     try:
         print("\n" + "="*60)
         print("GEOPOLITICAL GRAND STRATEGY ENGINE (GPSE)")
@@ -254,6 +278,9 @@ def main():
         
         # Initialize crew
         gpse_crew = GPSECrew()
+        
+        # Store the output filepath
+        output_filepath = gpse_crew.output_filepath
         
         # Create crew instance
         crew_instance = gpse_crew.crew()
@@ -274,6 +301,9 @@ def main():
         print("-" * 50)
         if result:
             print(result)
+        
+        # Print the absolute file path as the very last line
+        print(output_filepath)
         
     except Exception as e:
         logger.error(f"Critical error: {str(e)}")

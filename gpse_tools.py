@@ -1,7 +1,6 @@
 """
-Enhanced GPSE Tools Module with Multiple News API Support
-Uses Tavily and World News API as primary sources with NewsAPI as fallback
-Fixed version that properly handles tool calls within tools
+Comprehensive GPSE Tools Module
+Combines enhanced news tools with database and utility functions
 """
 
 import os
@@ -15,10 +14,13 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# CrewAI imports
+# CrewAI and ChromaDB imports
 from crewai.tools import tool
-import requests
+import chromadb
+from sentence_transformers import SentenceTransformer
+from tavily import TavilyClient
 from bs4 import BeautifulSoup
+import requests
 
 # Configure logging
 logging.basicConfig(
@@ -28,6 +30,83 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# Utility Functions (from original gpse_tools.py)
+def ensure_directory(directory: Path) -> None:
+    """Ensure a directory exists, create if it doesn't."""
+    directory = Path(directory)
+    if not directory.exists():
+        directory.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Created directory: {directory}")
+
+
+def get_timestamp(format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
+    """Get current timestamp in specified format."""
+    return datetime.now().strftime(format_str)
+
+
+def get_date_code() -> str:
+    """Get date code in MMDDYY format."""
+    return datetime.now().strftime("%m%d%y")
+
+
+# Database Tools (from original gpse_tools.py)
+@tool("Strategy Database Query")
+def query_strategy_database(query_text: str) -> str:
+    """
+    Search the strategy database for relevant historical analyses and context.
+    Provide a natural language query to find similar strategic insights,
+    geopolitical analyses, or specific country/region information from past entries.
+    """
+    try:
+        # Initialize persistent ChromaDB client
+        client = chromadb.PersistentClient(path='./strategy_db_chroma')
+        
+        # Get collection
+        try:
+            collection = client.get_collection(name='grand_strategy')
+        except Exception:
+            return f"Database collection 'grand_strategy' not found. No historical analyses available yet."
+        
+        # Get the sentence transformer model
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+        
+        # Create embedding for the query
+        logger.info(f"Creating embedding for query: {query_text[:50]}...")
+        query_embedding = model.encode(query_text).tolist()
+        
+        # Query the collection
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=3
+        )
+        
+        # Format and return the results
+        if results and 'documents' in results and results['documents']:
+            documents = results['documents'][0]  # Results are nested in a list
+            
+            if not documents:
+                return "No matching historical analyses found for this query."
+            
+            # Format the results nicely
+            formatted_results = []
+            formatted_results.append(f"Found {len(documents)} relevant historical analyses:\n")
+            
+            for i, doc in enumerate(documents, 1):
+                # Truncate very long documents for readability
+                preview = doc[:500] + "..." if len(doc) > 500 else doc
+                formatted_results.append(f"\n--- Result {i} ---")
+                formatted_results.append(preview)
+            
+            return "\n".join(formatted_results)
+        else:
+            return "No matching historical analyses found for this query."
+            
+    except Exception as e:
+        logger.error(f"Error querying database: {str(e)}")
+        return f"Error searching the strategy database: {str(e)}"
+
+
+# Internal news search function (from enhanced version)
 def _internal_news_search(query: str) -> List[Dict[str, Any]]:
     """
     Internal news search function that returns raw results.
@@ -150,6 +229,7 @@ def _internal_news_search(query: str) -> List[Dict[str, Any]]:
     return results
 
 
+# Enhanced News Tools (from enhanced version)
 @tool("Enhanced News Search")
 def enhanced_news_search(query: str) -> str:
     """
@@ -346,25 +426,14 @@ news_aggregator_tool = aggregate_geopolitical_news
 
 
 if __name__ == "__main__":
-    # Test the enhanced tools
-    print("Testing Enhanced News Tools...")
-    print(f"Configured APIs:")
+    # Test the tools
+    print("Testing Comprehensive GPSE Tools...")
+    print(f"\nCurrent timestamp: {get_timestamp()}")
+    print(f"Date code: {get_date_code()}")
+    
+    print(f"\nConfigured APIs:")
     print(f"- Tavily: {'✓' if os.environ.get('TAVILY_API_KEY') else '✗'}")
     print(f"- World News API: {'✓' if os.environ.get('WORLD_NEWS_API_KEY') and os.environ.get('WORLD_NEWS_API_KEY') != 'your_world_news_api_key_here' else '✗'}")
     print(f"- NewsAPI: {'✓' if os.environ.get('NEWS_API_KEY') and os.environ.get('NEWS_API_KEY') != 'your_news_api_key_here' else '✗'}")
     
-    # Test search using the raw function
-    print("\nTesting internal search function...")
-    results = _internal_news_search("Ukraine Russia conflict latest")
-    print(f"Found {len(results)} results")
-    
-    # Test the tools
-    print("\nTesting Enhanced News Search tool...")
-    result_str = enhanced_news_search.run("Ukraine conflict")
-    print(f"Search Result:\n{result_str[:500]}...")
-    
-    # Test aggregator
-    print("\nTesting Geopolitical News Aggregator tool...")
-    focus_areas = ["Ukraine conflict", "Middle East tensions"]
-    aggregated = aggregate_geopolitical_news.run(focus_areas)
-    print(f"Aggregated Result:\n{aggregated[:500]}...")
+    print("\nAll tools are ready for use with CrewAI agents!")

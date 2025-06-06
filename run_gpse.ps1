@@ -1,12 +1,11 @@
-# PowerShell script to run GPSE FINAL FIXED VERSION in a clean environment
-# This version fixes the double path and missing analysis_id issues
+# PowerShell script to run GPSE with fixed memory
+# Updated version that runs main_crew_fixed_memory.py
 
-Write-Host "`nGPSE Terminal Runner - FINAL FIXED VERSION" -ForegroundColor Green
+Write-Host "`nGPSE Terminal Runner" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
-Write-Host "Fixes applied:" -ForegroundColor Yellow
-Write-Host "- Double path issue (strategy_analyses/strategy_analyses/...)" -ForegroundColor Yellow
-Write-Host "- Missing analysis_id KeyError" -ForegroundColor Yellow
-Write-Host "- Result logging errors`n" -ForegroundColor Yellow
+Write-Host "With comprehensive agent quality enhancements" -ForegroundColor Yellow
+Write-Host "Memory FIXED with environment variable override" -ForegroundColor Cyan
+Write-Host ""
 
 # Navigate to project directory
 Set-Location "C:\Users\every\Desktop\GPSE_Project"
@@ -24,11 +23,11 @@ if (Test-Path ".\gpse_venv\Scripts\Activate.ps1") {
     pip install -r requirements.txt
 }
 
-Write-Host "`nRunning GPSE with all fixes..." -ForegroundColor Green
+Write-Host "`nRunning GPSE with fixed memory configuration..." -ForegroundColor Green
 Write-Host ""
 
-# Run the final fixed version
-python run_gpse_final.py
+# Run the main crew with FIXED memory
+python main_crew_fixed_memory.py
 
 Write-Host "`nExecution complete!" -ForegroundColor Green
 
@@ -41,3 +40,6 @@ if (Test-Path $analysisFile) {
         Start-Process notepad.exe $analysisFile
     }
 }
+
+# Keep the window open
+Read-Host "`nPress Enter to exit"
