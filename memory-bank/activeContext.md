@@ -2,9 +2,32 @@
 
 ## Current Work Session
 **Date:** June 6, 2025
-**Focus:** Fixing Regional Bias in GPSE Analysis
+**Focus:** World News API as Primary Source for Global Coverage
 
-## Latest Development: Global Coverage Version Created
+## Latest Development: News Source Priority Updated
+
+### Change Implemented
+Modified `gpse_tools.py` to make World News API the primary news source:
+- **World News API** is now Primary Source (best for global coverage)
+- **Tavily API** is now Secondary Source (AI-enhanced search)
+- **NewsAPI.org** remains as Tertiary fallback
+
+### Rationale for Change
+For the global version of GPSE, World News API is better suited as primary because:
+1. **Explicit International Focus** - Name and design indicate global scope
+2. **Better Regional Coverage** - More diverse sources from non-Western regions
+3. **Geopolitical Relevance** - Designed specifically for world news monitoring
+4. **Supports Global Mandate** - Better coverage of Africa, Latin America, South Asia, etc.
+
+### Technical Implementation
+The `_internal_news_search` function now queries sources in this order:
+1. World News API (Primary) - For comprehensive global coverage
+2. Tavily (Secondary) - For AI-enhanced contextual search
+3. NewsAPI (Tertiary) - As additional fallback
+
+All three sources are still queried simultaneously when available, ensuring redundancy and comprehensive coverage.
+
+## Previous Context: Global Coverage Version Created
 
 ### Problem Identified
 The original GPSE system had hardcoded bias toward China-US-Russia dynamics:
@@ -42,7 +65,7 @@ python main_crew_global.py
 ## System Configuration Status
 - **ChromaDB Memory**: ✅ Working perfectly
 - **Multi-Agent System**: ✅ All agents functional
-- **News Gathering**: ✅ Collecting diverse global news
+- **News Gathering**: ✅ World News API as primary, collecting diverse global news
 - **Analysis Bias**: ✅ FIXED - Now provides balanced global coverage
 
 ## Key Benefits of Global Version
@@ -57,7 +80,7 @@ python main_crew_global.py
 - **Global (`main_crew_global.py`)**: Balanced worldwide coverage, complete picture
 
 ## Next Steps
-1. Test the global version to verify balanced coverage
-2. Consider making this the default version
-3. Update documentation to reflect global coverage capability
-4. Monitor outputs to ensure all regions get appropriate attention
+1. Test the global version with updated news source priority
+2. Verify World News API provides better global coverage
+3. Monitor outputs to ensure all regions get appropriate attention
+4. Consider documenting the improved global coverage in README

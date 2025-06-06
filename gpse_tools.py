@@ -114,40 +114,7 @@ def _internal_news_search(query: str) -> List[Dict[str, Any]]:
     """
     results = []
     
-    # Try Tavily (Primary Source 1)
-    tavily_key = os.environ.get('TAVILY_API_KEY')
-    if tavily_key:
-        try:
-            from tavily import TavilyClient
-            client = TavilyClient(api_key=tavily_key)
-            
-            # Search parameters
-            search_params = {
-                "query": query,
-                "max_results": 8,
-                "search_depth": "advanced",
-                "topic": "news",
-                "days": 2  # Last 48 hours
-            }
-            
-            logger.info(f"Searching Tavily for: {query}")
-            tavily_results = client.search(**search_params)
-            
-            if tavily_results and 'results' in tavily_results:
-                for item in tavily_results['results']:
-                    results.append({
-                        'source': 'Tavily',
-                        'title': item.get('title', 'No title'),
-                        'url': item.get('url', ''),
-                        'content': item.get('content', '')[:500],
-                        'published_date': item.get('published_date', ''),
-                        'relevance_score': item.get('score', 0.0)
-                    })
-                logger.info(f"Found {len(results)} results from Tavily")
-        except Exception as e:
-            logger.warning(f"Tavily search failed: {e}")
-    
-    # Try World News API (Primary Source 2)
+    # Try World News API (Primary Source - Best for Global Coverage)
     world_news_key = os.environ.get('WORLD_NEWS_API_KEY')
     if world_news_key and world_news_key != 'your_world_news_api_key_here':
         try:
@@ -186,6 +153,39 @@ def _internal_news_search(query: str) -> List[Dict[str, Any]]:
                     logger.info(f"Added {len(data['news'])} results from World News API")
         except Exception as e:
             logger.warning(f"World News API search failed: {e}")
+    
+    # Try Tavily (Secondary Source - AI-Optimized Search)
+    tavily_key = os.environ.get('TAVILY_API_KEY')
+    if tavily_key:
+        try:
+            from tavily import TavilyClient
+            client = TavilyClient(api_key=tavily_key)
+            
+            # Search parameters
+            search_params = {
+                "query": query,
+                "max_results": 8,
+                "search_depth": "advanced",
+                "topic": "news",
+                "days": 2  # Last 48 hours
+            }
+            
+            logger.info(f"Searching Tavily for: {query}")
+            tavily_results = client.search(**search_params)
+            
+            if tavily_results and 'results' in tavily_results:
+                for item in tavily_results['results']:
+                    results.append({
+                        'source': 'Tavily',
+                        'title': item.get('title', 'No title'),
+                        'url': item.get('url', ''),
+                        'content': item.get('content', '')[:500],
+                        'published_date': item.get('published_date', ''),
+                        'relevance_score': item.get('score', 0.0)
+                    })
+                logger.info(f"Found {len(results)} results from Tavily")
+        except Exception as e:
+            logger.warning(f"Tavily search failed: {e}")
     
     # Try NewsAPI.org as additional fallback
     news_api_key = os.environ.get('NEWS_API_KEY')
@@ -234,8 +234,8 @@ def _internal_news_search(query: str) -> List[Dict[str, Any]]:
 def enhanced_news_search(query: str) -> str:
     """
     Enhanced news search that uses multiple APIs simultaneously:
-    1. Tavily API (primary source)
-    2. World News API (primary source)
+    1. World News API (primary source for global coverage)
+    2. Tavily API (secondary source for AI-enhanced search)
     3. NewsAPI.org (additional fallback)
     
     This ensures comprehensive news coverage from multiple sources.
