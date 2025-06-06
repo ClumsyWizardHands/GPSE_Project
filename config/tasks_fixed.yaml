@@ -1,0 +1,99 @@
+news_scout_task:
+  description: >
+    Search for top news articles from the last 24-48 hours focusing on:
+    1. Active warzones and battlefronts (Ukraine, Gaza, Sudan, Myanmar, etc.)
+    2. Strategic atrocities with geopolitical impact
+    3. Major power alignments and support behaviors
+    4. Proxy conflicts and covert escalations
+    5. State-enabled cyber warfare and disinformation campaigns
+    6. Significant diplomatic developments or breakdowns
+    
+    Use multiple search queries to ensure comprehensive coverage.
+    Prioritize authoritative sources and verify information credibility.
+  expected_output: >
+    A structured JSON report containing:
+    - 15-25 high-impact news articles
+    - For each article: URL, title, date, source, summary, relevance_score
+    - Categorization by topic area
+    - Brief assessment of source credibility
+  agent: news_scout
+
+geo_analyst_task:
+  description: >
+    Task the geo_analyst agent with producing a comprehensive grand strategy analysis 
+    using the most recent geopolitical news gathered by the news_scout agent as context, 
+    alongside historical strategic data retrieved via ChromaDB. The agent should analyze 
+    the current events in light of historical precedent, inferred strategic doctrine, 
+    and evolving alignment patterns between major state and non-state actors. 
+    
+    The analysis should emphasize:
+    1. Key shifts in power configurations
+    2. Emerging flashpoints and asymmetric threats
+    3. Latent strategic opportunities
+    4. Subtle relational signals indicating larger moves underway
+    5. Covert alignments and hidden strategic partnerships
+    6. Long-horizon consequences of current developments
+    7. Intertemporal patterns connecting past behaviors to future trajectories
+    
+    Apply classical military theory frameworks while incorporating modern asymmetric 
+    warfare concepts. Never oversimplify the strategic gameboard.
+  expected_output: >
+    A detailed, well-structured strategic analysis document that includes:
+    
+    ### Executive Summary
+    A comprehensive overview of the current geopolitical landscape and key strategic shifts
+    
+    ### Primary Observations
+    Detailed analysis of each major actor with:
+    - [Actor Name]: Strategic positioning and recent moves
+    - Observable Behavior: What they are doing
+    - Inferred Strategic Shift: Why they are doing it
+    - Emotion Signals/Identity/Resentments: Deep motivations
+    
+    ### Strategic Implications
+    - Emerging power dynamics
+    - Potential flashpoints
+    - Alignment shifts
+    
+    ### Scenario Analysis
+    3-6 month projections based on current trajectories
+    
+    The analysis should be verbose and comprehensive, with each section fully developed.
+  agent: geo_analyst
+  context:
+    - news_scout_task
+
+communicator_task:
+  description: >
+    CRITICAL INSTRUCTIONS - READ CAREFULLY:
+    
+    Your PRIMARY task is to SAVE THE COMPLETE STRATEGIC ANALYSIS that was produced by the Geo Analyst.
+    
+    DO NOT create a quality assurance report.
+    DO NOT write about validation checks.
+    DO NOT summarize or evaluate the analysis.
+    
+    INSTEAD, you must:
+    1. Use the Extract Analysis Content tool to get the FULL strategic analysis from the Geo Analyst
+    2. Use the Save Strategic Analysis tool to save this COMPLETE analysis to a file
+    3. The saved file MUST contain the actual geopolitical analysis with all sections:
+       - Executive Summary
+       - Primary Observations for each actor
+       - Strategic Implications
+       - Scenario Analysis
+    
+    The output file should be the strategic analysis itself, NOT a report about the analysis.
+    
+    After saving, confirm the file location and provide a brief summary of what was saved.
+  expected_output: >
+    Confirmation that the COMPLETE strategic analysis was saved, including:
+    - The absolute file path where the analysis was saved
+    - A brief list of the main actors and themes covered
+    - Confirmation that all sections were included
+    
+    DO NOT provide a quality assurance checklist or validation report.
+  agent: communicator
+  context:
+    - news_scout_task
+    - geo_analyst_task
+  output_file: strategy_analyses/GGSM-{date_code}-DailyAnalysis.md
