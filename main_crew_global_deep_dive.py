@@ -105,14 +105,14 @@ class GPSECrewDeepDive:
         )
         logger.info("News Scout LLM: Claude 3.5 Haiku (fast processing)")
         
-        # Geopolitical Analyst: GPT-4o for deep reasoning with higher token limit
+        # Geopolitical Analyst: o1-preview for maximum reasoning capability
         self.geo_analyst_llm = ChatOpenAI(
-            model="gpt-4o",
+            model="o1-preview",
             temperature=0.7,
-            max_tokens=8000,  # Increased for detailed analysis
+            max_tokens=25000,  # Substantially increased for comprehensive analysis
             api_key=os.getenv("OPENAI_API_KEY")
         )
-        logger.info("Geopolitical Analyst LLM: GPT-4o (deep reasoning)")
+        logger.info("Geopolitical Analyst LLM: o1-preview (advanced reasoning)")
         
         # Communicator: GPT-4o Mini with multi-file capabilities
         self.communicator_llm = ChatOpenAI(
@@ -172,7 +172,7 @@ class GPSECrewDeepDive:
             You NEVER compress analysis - you provide FULL depth for every region.""",
             tools=[self.database_tool, self.news_tool],
             llm=self.geo_analyst_llm,
-            max_iter=5,  # Increased for detailed analysis
+            max_iter=15,  # Increased to allow comprehensive analysis completion
             verbose=True,
             memory=True
         )
