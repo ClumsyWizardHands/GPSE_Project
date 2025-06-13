@@ -51,3 +51,6 @@ logs/
 
 # Archive folder (old versions)
 archive/
+
+# Debug outputs (temporary news collection files)
+debug_outputs/

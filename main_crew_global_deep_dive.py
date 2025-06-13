@@ -97,31 +97,61 @@ class GPSECrewDeepDive:
     def _initialize_llms(self):
         """Initialize different LLM configurations for each agent"""
         # News Scout: Claude 3.5 Haiku for fast, efficient news processing
-        self.news_scout_llm = ChatAnthropic(
-            model="claude-3-5-haiku-20241022",
-            temperature=0.7,
-            max_tokens=4000,
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
-        )
-        logger.info("News Scout LLM: Claude 3.5 Haiku (fast processing)")
+        try:
+            self.news_scout_llm = ChatAnthropic(
+                model="claude-3-5-haiku-20241022",
+                temperature=0.7,
+                max_tokens=30000,  # 30K tokens as requested
+                anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
+            )
+            logger.info("News Scout LLM: Claude 3.5 Haiku (30K tokens)")
+        except Exception as e:
+            logger.warning(f"Claude 3.5 Haiku failed, using fallback: {e}")
+            self.news_scout_llm = ChatOpenAI(
+                model="gpt-4o-mini",
+                temperature=0.7,
+                max_tokens=30000,
+                api_key=os.getenv("OPENAI_API_KEY")
+            )
+            logger.info("News Scout LLM: GPT-4o Mini fallback (30K tokens)")
         
-        # Geopolitical Analyst: o1-preview for maximum reasoning capability
-        self.geo_analyst_llm = ChatOpenAI(
-            model="o1-preview",
-            temperature=0.7,
-            max_tokens=25000,  # Substantially increased for comprehensive analysis
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
-        logger.info("Geopolitical Analyst LLM: o1-preview (advanced reasoning)")
+        # Geopolitical Analyst: OpenAI o3 for advanced reasoning
+        try:
+            self.geo_analyst_llm = ChatOpenAI(
+                model="o3",
+                temperature=0.3,  # Lower temperature for analytical precision
+                max_tokens=30000,  # 30K tokens as requested
+                api_key=os.getenv("OPENAI_API_KEY")
+            )
+            logger.info("Geopolitical Analyst LLM: OpenAI o3 (30K tokens)")
+        except Exception as e:
+            logger.warning(f"OpenAI o3 failed, using GPT-4o fallback: {e}")
+            self.geo_analyst_llm = ChatOpenAI(
+                model="gpt-4o",
+                temperature=0.3,
+                max_tokens=30000,
+                api_key=os.getenv("OPENAI_API_KEY")
+            )
+            logger.info("Geopolitical Analyst LLM: GPT-4o fallback (30K tokens)")
         
-        # Communicator: GPT-4o Mini with multi-file capabilities
-        self.communicator_llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=0.3,
-            max_tokens=8000,  # Increased for multiple outputs
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
-        logger.info("Communicator LLM: GPT-4o Mini (multi-file output)")
+        # Communicator: Claude 4 Opus for advanced communication
+        try:
+            self.communicator_llm = ChatAnthropic(
+                model="claude-4-opus",
+                temperature=0.5,
+                max_tokens=30000,  # 30K tokens as requested
+                anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
+            )
+            logger.info("Communicator LLM: Claude 4 Opus (30K tokens)")
+        except Exception as e:
+            logger.warning(f"Claude 4 Opus failed, using Claude 3.5 Sonnet fallback: {e}")
+            self.communicator_llm = ChatAnthropic(
+                model="claude-3-5-sonnet-20241022",
+                temperature=0.5,
+                max_tokens=30000,
+                anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
+            )
+            logger.info("Communicator LLM: Claude 3.5 Sonnet fallback (30K tokens)")
     
     def news_scout(self) -> Agent:
         """Create News Scout Agent"""
