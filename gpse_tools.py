@@ -14,13 +14,17 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# CrewAI and ChromaDB imports
-from crewai.tools import tool
+# ChromaDB imports
+from langchain.tools import tool
 import chromadb
 from sentence_transformers import SentenceTransformer
 from tavily import TavilyClient
 from bs4 import BeautifulSoup
 import requests
+import anthropic
+
+# Internal project imports
+from schemas import StrategicPathway
 
 # Configure logging
 logging.basicConfig(
@@ -419,10 +423,113 @@ def aggregate_geopolitical_news(focus_areas: List[str]) -> str:
         return "Unable to aggregate news. Please check API configurations."
 
 
+@tool("Pathway Extractor")
+def pathway_extractor(document_content: str) -> List[Dict[str, Any]]:
+    """
+    Analyzes a strategic analysis document to identify and extract key
+    inferred strategic pathways.
+
+    Args:
+        document_content: The full text content of the strategic analysis document.
+
+    Returns:
+        A list of dictionaries, where each dictionary conforms to the
+        StrategicPathway schema. Returns an empty list if no pathways are found
+        or if an error occurs.
+    """
+    logger.info("Initializing Pathway Extractor Tool with Claude 4 Sonnet...")
+
+    # Ensure the Anthropic API key is available
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        logger.error("ANTHROPIC_API_KEY environment variable not set.")
+        return []
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    # Define the prompt for the LLM
+    system_prompt = (
+        "You are a meta-analyst. Your task is to review the strategic analysis "
+        "document provided and identify the key *inferred strategic pathways* "
+        "discussed within it. A 'strategic pathway' is not a simple prediction, "
+        "but a potential future scenario or an evolving strategic narrative. It "
+        "describes a sequence of potential events and actions by key actors that "
+        "could lead to a significant geopolitical outcome. Your output must be a "
+        "JSON object containing a single key 'pathways' which holds a list of "
+        "JSON objects, each conforming *exactly* to the StrategicPathway schema. "
+        "Pay close attention to the 'indicators' field; they must be specific, "
+        "observable events. If no clear pathways are present, return an empty list "
+        "inside the 'pathways' key."
+    )
+    
+    user_prompt = f"""
+    Please analyze the following document and extract the strategic pathways.
+
+    Document Content:
+    ---
+    {document_content}
+    ---
+
+    Respond with a JSON object containing a 'pathways' key, which holds a list of objects conforming to the StrategicPathway schema.
+    """
+
+    try:
+        logger.info("Sending request to Anthropic to extract pathways...")
+        response = client.messages.create(
+            model="claude-3-sonnet-20240229",
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[
+                {
+                    "role": "user",
+                    "content": user_prompt
+                }
+            ],
+            temperature=0.2,
+        )
+
+        response_content = response.content[0].text
+        logger.info("Received response from Anthropic.")
+
+        # The response should be a JSON string, load it into a Python dict
+        data = json.loads(response_content)
+        
+        # Extract the list of pathway dictionaries
+        pathway_dicts = data.get("pathways", [])
+
+        if not pathway_dicts:
+            logger.info("No pathways were extracted from the document.")
+            return []
+
+        # Validate each dictionary with the Pydantic model
+        validated_pathways = []
+        for pathway_dict in pathway_dicts:
+            try:
+                # Pydantic can validate directly from a dictionary
+                validated_pathway = StrategicPathway.model_validate(pathway_dict)
+                # Convert back to dict for tool output consistency if needed, or return Pydantic objects
+                validated_pathways.append(validated_pathway.model_dump())
+            except Exception as pydantic_error:
+                logger.error(f"Pydantic validation failed for a pathway: {pydantic_error}")
+                logger.error(f"Problematic pathway data: {pathway_dict}")
+
+        logger.info(f"Successfully extracted and validated {len(validated_pathways)} pathways.")
+        return validated_pathways
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to decode JSON from LLM response: {e}")
+        logger.error(f"Raw response content: {response_content}")
+        return []
+    except Exception as e:
+        logger.error(f"An unexpected error occurred in the pathway_extractor tool: {e}")
+        return []
+
+
 # Export tool instances for use in agents
 news_search_tool = enhanced_news_search
 url_fetch_tool = fetch_news_from_url
 news_aggregator_tool = aggregate_geopolitical_news
+pathway_extraction_tool = pathway_extractor
 
 
 if __name__ == "__main__":

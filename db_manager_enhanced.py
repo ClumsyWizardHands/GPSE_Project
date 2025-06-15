@@ -11,6 +11,8 @@ import logging
 import re
 import os
 from datetime import datetime
+import json
+from schemas import StrategicPathway, PathwayUpdate
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -32,11 +34,11 @@ def get_model():
 class ChromaDBManager:
     """Enhanced wrapper class for ChromaDB operations supporting multiple document formats."""
     
-    def __init__(self, collection_name: str = 'grand_strategy', db_path: str = './strategy_db_chroma'):
-        self.collection_name = collection_name
+    def __init__(self, db_path: str = './strategy_db_chroma'):
         self.db_path = db_path
         self.client = chromadb.PersistentClient(path=db_path)
-        self.collection = self.client.get_or_create_collection(name=collection_name)
+        self.collection = self.client.get_or_create_collection(name='grand_strategy')
+        self.pathways_collection = self.client.get_or_create_collection(name='strategic_pathways')
         self.model = get_model()
     
     def add_text_to_db(self, text_content: str, document_id: str, metadata: Dict[str, Any] = None) -> bool:
@@ -56,7 +58,7 @@ class ChromaDBManager:
                 metadatas=[doc_metadata]
             )
             
-            logger.info(f"Successfully added document {document_id} to collection {self.collection_name}")
+            logger.info(f"Successfully added document {document_id} to collection {self.collection.name}")
             return True
             
         except Exception as e:
@@ -78,6 +80,76 @@ class ChromaDBManager:
         except Exception as e:
             logger.error(f"Error querying database: {str(e)}")
             return {'documents': [[]], 'metadatas': [[]], 'distances': [[]]}
+
+    def add_pathway(self, pathway_data: StrategicPathway) -> bool:
+        """Adds a StrategicPathway object to the database."""
+        try:
+            # Serialize the object to a JSON string for storage as the document
+            doc_json = pathway_data.model_dump_json()
+            
+            # The text to be embedded is a combination of title, description, and indicators
+            text_to_embed = f"Title: {pathway_data.title}\nDescription: {pathway_data.description}\nIndicators: {', '.join(pathway_data.indicators)}"
+            embedding = self.model.encode(text_to_embed).tolist()
+            
+            self.pathways_collection.add(
+                documents=[doc_json],
+                embeddings=[embedding],
+                ids=[pathway_data.pathway_id],
+                metadatas=[pathway_data.model_dump()] # Store the whole object as metadata as well
+            )
+            logger.info(f"Successfully added pathway {pathway_data.pathway_id} to collection 'strategic_pathways'")
+            return True
+        except Exception as e:
+            logger.error(f"Error adding pathway to database: {str(e)}")
+            return False
+
+    def update_pathway(self, pathway_id: str, update_data: PathwayUpdate) -> bool:
+        """Updates an existing pathway with a new update event."""
+        try:
+            # Retrieve the existing pathway
+            existing_pathway_doc = self.pathways_collection.get(ids=[pathway_id])
+            if not existing_pathway_doc['documents']:
+                logger.error(f"Pathway with ID {pathway_id} not found.")
+                return False
+            
+            # Deserialize, update, and re-serialize
+            pathway = StrategicPathway.model_validate_json(existing_pathway_doc['documents'][0])
+            pathway.updates.append(update_data)
+            pathway.last_updated = datetime.now().date()
+            
+            # Now upsert the updated object
+            doc_json = pathway.model_dump_json()
+            text_to_embed = f"Title: {pathway.title}\nDescription: {pathway.description}\nIndicators: {', '.join(pathway.indicators)}"
+            embedding = self.model.encode(text_to_embed).tolist()
+
+            self.pathways_collection.upsert(
+                documents=[doc_json],
+                embeddings=[embedding],
+                ids=[pathway.pathway_id],
+                metadatas=[pathway.model_dump()]
+            )
+            logger.info(f"Successfully updated pathway {pathway_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating pathway {pathway_id}: {str(e)}")
+            return False
+
+    def find_relevant_pathways(self, event_summary: str, key_actors: List[str], n_results: int = 3) -> List[StrategicPathway]:
+        """Finds relevant pathways based on an event summary and key actors."""
+        try:
+            query_text = f"Event: {event_summary}\nActors: {', '.join(key_actors)}"
+            query_embedding = self.model.encode(query_text).tolist()
+            
+            results = self.pathways_collection.query(
+                query_embeddings=[query_embedding],
+                n_results=n_results
+            )
+            
+            pathways = [StrategicPathway.model_validate_json(doc) for doc in results['documents'][0]]
+            return pathways
+        except Exception as e:
+            logger.error(f"Error finding relevant pathways: {str(e)}")
+            return []
     
     def detect_document_format(self, content: str) -> str:
         """Detect whether document is legacy or enhanced format."""
@@ -302,22 +374,20 @@ class ChromaDBManager:
 def add_text_to_db(
     text_content: str,
     document_id: str,
-    collection_name: str = 'grand_strategy',
     db_path: str = './strategy_db_chroma'
 ) -> bool:
     """Add text content to ChromaDB with embeddings."""
-    manager = ChromaDBManager(collection_name, db_path)
+    manager = ChromaDBManager(db_path)
     return manager.add_text_to_db(text_content, document_id)
 
 
 def query_db(
     query_text: str,
     n_results: int = 3,
-    collection_name: str = 'grand_strategy',
     db_path: str = './strategy_db_chroma'
 ) -> List[str]:
     """Query the ChromaDB for similar documents."""
-    manager = ChromaDBManager(collection_name, db_path)
+    manager = ChromaDBManager(db_path)
     results = manager.query_db(query_text, n_results)
     
     if results and 'documents' in results and results['documents']:

@@ -1,75 +1,52 @@
 # Active Context
-Last Updated: June 13, 2025
+Last Updated: June 14, 2025
 
 ## Current Focus
-- ✅ COMPLETED: Temporal Awareness Fix for GPSE System
-- System now correctly identifies and describes past, present, and future events
-- Ready for next iteration of improvements
+- ✅ COMPLETED: Research and planning for the Strategic Pathways Modeler.
+- System is stable and ready for the next phase of development.
+- **Next Up**: Phase 2 - Implement the Strategic Pathways Modeler.
 
 ## Recent Developments
 
-### 1. Temporal Awareness Fix Implemented (June 13, 2025 - 5:00 AM)
-- **Problem Identified**: GPSE was treating past events (e.g., "Israel struck Iran") as future possibilities
-- **Root Cause**: LLMs weren't explicitly instructed to parse temporal markers
-- **Solution Implemented**:
-  - Added `TemporalEventParser` class with temporal marker detection
-  - Updated Breaking Event Detector prompt with temporal instructions
-  - Enhanced Analyst prompt with temporal accuracy requirements
-  - Added temporal verification to Communicator prompt
-  - Articles now tagged with temporal_status metadata
-- **Test Results**: All temporal classification tests passing ✓
+### 1. Full System Test & Temporal Fix Validation (June 14, 2025)
+- **Action**: Executed `run_gpse_enhanced_memory.py` to perform a full-cycle analysis.
+- **Outcome**: The run completed successfully, validating the temporal awareness fix in a production-like environment. The system correctly identified past, present, and future events from a collection of 146 articles.
+- **Details**:
+    - Detected 4 breaking events and ran adaptive searches.
+    - Queried 24 relevant historical analyses from ChromaDB.
+    - Generated and stored the `GGSM-June 14, 2025-EnhancedMemoryAnalysis.md` report.
+    - Stored 6 new analysis chunks into the institutional memory.
+- **Errors Encountered & Fixed**:
+    - `openai.BadRequestError`: Resolved by changing `max_tokens` to `max_completion_tokens` for the o3 model.
+    - `anthropic.ValueError`: Resolved by implementing streaming (`.stream()`) for the long-form communicator agent call.
 
-### 2. Enhanced Memory System Complete (June 13, 2025 - Earlier)
-- **Breaking Event Detection**: Successfully implemented and tested
-  - Detected Israel-Iran tensions, AUKUS crisis, rare earth competition
-  - Adaptive search queries generated based on breaking events
-- **Multi-Source News**: Integrated Tavily + WorldNewsAPI
-  - 128 articles collected in test run (99 initial + 29 from adaptive searches)
-- **ChromaDB Storage Fixed**: 
-  - Created `db_manager_enhanced.py` supporting multiple formats
-  - Successfully stored 100+ chunks from all existing analyses
-  - Verified retrieval working with relevant results
+### 2. Temporal Awareness Fix Implemented (June 13, 2025)
+- **Details**: The core temporal logic implemented on June 13 was proven effective in the full run. This includes the `TemporalEventParser`, updated prompts, and `temporal_status` metadata tagging.
 
-### 3. Key Files Created/Modified Today
-- `run_gpse_enhanced_memory.py` - Enhanced GPSE with breaking event detection + temporal fix
-- `db_manager_enhanced.py` - Enhanced DB manager supporting all formats
-- `test_temporal_fix.py` - Test suite for temporal awareness
-- Successfully generated analysis with breaking events highlighted
-
-### 4. System Capabilities Now Include
-- **Four Operational Modes**:
-  1. Executive Brief Mode (main_crew_global.py)
-  2. Deep Dive Mode (main_crew_global_deep_dive.py)
-  3. Memory-Enhanced Mode (run_gpse_improved_with_memory.py)
-  4. Enhanced Memory Mode (run_gpse_enhanced_memory.py) - NOW WITH TEMPORAL AWARENESS!
-
-### 5. Technical Implementation Details
-- Breaking event detector uses keyword detection + LLM validation with temporal context
-- Multi-source deduplication by URL
-- Enhanced chunking strategy handles both legacy and new formats
-- Metadata includes format type and temporal status for better organization
-- Temporal parser classifies events as PAST, PRESENT/ONGOING, or FUTURE
+### 3. System Capabilities
+- The four operational modes are confirmed to be functioning, with the **Enhanced Memory Mode** now fully validated.
 
 ## Active Tasks
-1. ✅ Phase 1: Enhanced Memory Implementation COMPLETE
-2. ✅ Temporal Awareness Fix COMPLETE
-3. ⏳ Phase 2: Prediction Tracking (Next iteration)
-4. ⏳ Phase 3: Advanced Intelligence (Future)
+1. ✅ Phase 1: Foundational Research & Planning for Strategic Pathways Modeler COMPLETE
+2. ⏳ **CURRENT**: Phase 2 - Implementation of Strategic Pathways Modeler
+   - Implement `StrategicPathway` and `PathwayUpdate` schemas.
+   - Enhance `db_manager_enhanced.py` with pathway-specific functions.
+   - Develop and integrate the `Pathway Extractor` tool.
+   - Develop and integrate the `Strategic Pathway Monitor` agent.
+   - Develop and integrate the `Geopolitical Cartographer` agent.
+3. ⏳ Phase 3: Advanced Intelligence (Future)
 
-## Known Issues - ALL RESOLVED
-- ✅ ChromaDB storage issue FIXED
-- ✅ All analyses properly chunked and stored
-- ✅ Historical context retrieval working
-- ✅ Breaking event detection validated
-- ✅ Temporal awareness issue FIXED
+## Known Issues
+- All previously known issues have been resolved. The system is currently stable.
 
 ## Next Steps
-1. Run full GPSE analysis to verify temporal fix in production
-2. Begin Phase 2: Implement prediction tracking system
-3. Extract predictions from analyses with confidence levels
-4. Build verification framework for tracking outcomes
-5. Add prediction accuracy metrics
-6. Consider visualization layer for patterns
+1. **Begin Phase 2: Implement the Strategic Pathways Modeler.**
+   - Create `schemas.py` with Pydantic models.
+   - Add `add_pathway`, `update_pathway`, and `find_relevant_pathways` to `db_manager_enhanced.py`.
+   - Create a `Pathway Extractor` tool and integrate it with the `Communications & Archival Lead` agent.
+   - Create the `Strategic Pathway Monitor` agent and a script to run it.
+   - Create the `Geopolitical Cartographer` agent and integrate its reports into the main analysis loop.
+2. Scope out requirements for Phase 3: Advanced Intelligence.
 
 ## Performance Metrics
 - Enhanced analysis runtime: 10-25 minutes

@@ -54,6 +54,9 @@ from tavily import TavilyClient
 
 # Import ChromaDB manager
 from db_manager_enhanced import ChromaDBManager
+from gpse_tools import pathway_extractor
+from schemas import StrategicPathway
+import uuid
 
 # Configure logging
 logging.basicConfig(
@@ -297,10 +300,7 @@ class EnhancedGPSEWithMemory:
         self.sources_filename = f'strategy_analyses/GGSM-{self.current_date}-EnhancedMemorySources.md'
         
         # Initialize ChromaDB manager
-        self.db_manager = ChromaDBManager(
-            collection_name='grand_strategy',
-            db_path='./strategy_db_chroma'
-        )
+        self.db_manager = ChromaDBManager(db_path='./strategy_db_chroma')
         logger.info("ChromaDB manager initialized")
         
         # Initialize LLMs
@@ -340,7 +340,7 @@ class EnhancedGPSEWithMemory:
             self.analyst_llm = ChatOpenAI(
                 model="o3",
                 temperature=1.0,  # o3 only supports default temperature
-                max_tokens=4096,
+                max_completion_tokens=4096,
                 openai_api_key=o3_api_key
             )
             logger.info("Analyst: OpenAI o3 (Full context analysis)")
@@ -740,10 +740,11 @@ ORIGINAL SOURCES SUMMARY ({len(all_articles)} articles from Tavily + WorldNewsAP
 Ensure every strategic claim can be traced to specific sources and build upon our institutional knowledge.""")
         ]
         
-        final_report = self.communicator_llm.invoke(messages)
+        stream = self.communicator_llm.stream(messages)
+        final_report_content = "".join(chunk.content for chunk in stream)
         print("\nFinal Report Complete")
         
-        return final_report.content
+        return final_report_content
     
     def _create_articles_summary(self, articles):
         """Create a summary of articles for communicator reference"""
@@ -815,7 +816,33 @@ Ensure every strategic claim can be traced to specific sources and build upon ou
                 "climate change conflicts"
             ]
             historical_context = self.query_historical_context(key_topics)
-            
+
+            # Prepend the latest weekly landscape report to the historical context
+            try:
+                # Find the most recent report
+                strategy_dir = Path('strategy_analyses')
+                report_files = sorted(
+                    strategy_dir.glob('Strategic_Landscape_Report-*.md'),
+                    key=os.path.getmtime,
+                    reverse=True
+                )
+                if report_files:
+                    latest_report_path = report_files[0]
+                    with open(latest_report_path, 'r', encoding='utf-8') as f:
+                        report_content = f.read()
+                    
+                    # Add it as a high-priority context item
+                    historical_context.insert(0, {
+                        'topic': 'Weekly Strategic Landscape',
+                        'content': report_content,
+                        'metadata': {'date': latest_report_path.stem, 'section': 'Weekly Synthesis'},
+                        'relevance_score': 1.0 
+                    })
+                    print(f"\nSuccessfully loaded and prepended weekly report: {latest_report_path.name}")
+
+            except Exception as e:
+                logger.warning(f"Could not load weekly strategic landscape report: {e}")
+
             # Phase 2: Strategic Analysis (Full Context + History)
             analysis = self.run_analyst(all_articles, historical_context)
             
@@ -823,8 +850,12 @@ Ensure every strategic claim can be traced to specific sources and build upon ou
             final_report = self.run_communicator(analysis, all_articles)
             
             # Phase 4: Store in Memory
-            self.store_analysis_in_memory(final_report)
+            doc_id = self.store_analysis_in_memory(final_report)
             
+            # Phase 5: Extract and Store Pathways
+            if doc_id:
+                self.extract_and_store_pathways(final_report, doc_id)
+
             # Save the report
             os.makedirs('strategy_analyses', exist_ok=True)
             with open(self.output_filename, 'w', encoding='utf-8') as f:
@@ -842,6 +873,47 @@ Ensure every strategic claim can be traced to specific sources and build upon ou
         except Exception as e:
             logger.error(f"Error: {str(e)}")
             raise
+    
+    def extract_and_store_pathways(self, final_report: str, doc_id: str):
+        """Extract strategic pathways from the analysis and store them in ChromaDB"""
+        print("\n=== EXTRACTING STRATEGIC PATHWAYS ===")
+        
+        try:
+            # Use the pathway extractor tool to identify pathways
+            pathways = pathway_extractor(final_report)
+            
+            if not pathways:
+                print("No strategic pathways identified in this analysis.")
+                return
+            
+            print(f"Identified {len(pathways)} strategic pathways:")
+            
+            # Store each pathway in the database
+            for i, pathway_dict in enumerate(pathways, 1):
+                # Update the source_analysis_id to match our document
+                pathway_dict['source_analysis_id'] = doc_id
+                
+                # Generate a unique pathway ID if not provided
+                if 'pathway_id' not in pathway_dict:
+                    pathway_dict['pathway_id'] = f"pathway_{datetime.now().strftime('%Y%m%d')}_{i:03d}"
+                
+                # Ensure dates are properly formatted
+                pathway_dict['creation_date'] = datetime.now().date().isoformat()
+                pathway_dict['last_updated'] = datetime.now().date().isoformat()
+                
+                # Create the StrategicPathway object
+                pathway = StrategicPathway(**pathway_dict)
+                
+                # Add to database
+                self.db_manager.add_pathway(pathway)
+                
+                print(f"  - {pathway.title} (ID: {pathway.pathway_id})")
+                
+            print(f"\nSuccessfully stored {len(pathways)} pathways in ChromaDB")
+            
+        except Exception as e:
+            logger.error(f"Error extracting/storing pathways: {str(e)}")
+            print(f"Warning: Could not extract pathways - {str(e)}")
 
 def main():
     """Main execution"""
